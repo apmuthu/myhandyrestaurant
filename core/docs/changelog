@@ -1,0 +1,202 @@
+0.8.4 to 0.8.5 (released 29 January 2005)
+- Bugfix: deleted categories don't appear anymore in ingredients and dishes droplists
+- Replaced stock system with new version
+- Added Delete All button in administration
+- Added automatic unit converter (works with lb,oz,mg,cg,dg,g,dag,hg,kg,gal,floz,ml,cl,dl,l,hl)
+- Stock and dishes/ingredients integration
+- International names hidden in dishes/ingreds editing interfaces (admin section)
+- Translated column headers in admin tables
+- Bugfix: bill printing: command codes were not sent to printer
+- Improved search function in admin section. results are now collected in one table.
+- Added possibility to change Yes/No values on the fly, by directly clicking on the tables (admin section)
+- Connect form displayed directly when trying to access to restricted areas without being connected
+- New colour on tables list and in orders list (waiters' section) to distinguish the tables that have 2nd or 3rd priority orders that are waiting
+- Added "Print orders" button in new orders page (waiters' section)
+- Removed lock that denied printing "Go with 2nd/3rd priority dishes" more than once (waiters' section)
+- Added people number on printed tickets
+- Added feature: automatic customer data print on bills and tickets
+- Added automatic redirect to install page or upgrade page when needed
+- New dishes editing form to integrate stock data
+- Added fast order form in orders page in waiters' section (type in dish id or part of name)
+- Hidden orders list by default in waiters' section to improve performance
+- Added close button on top list (waiters)
+
+0.8.4-beta4 to 0.8.4 (released 9 December 2004)
+- Added jscalendar widget to select date in reports range
+- Bugfix: hour/minutes setting in the "to" side of the report time selector now works
+- Bugfix: corrected printers test page link
+- Bugfix: upgrader doesn't apply query if database has not been found
+- Added ingrendients list in dishes table and dishes list in ingredients table
+- Bugfix: remove in users and autocalc admin pages now works
+- Added Money user zone, to control money taking in waiter zone (write paid button)
+- Added possibility to insert equations instead of numbers in generic dish price form (waiters' zone)
+- Added mysql queries caching system (great speed improvement!)
+- Bugfix: shows category called 0 in categories list in waiters' zone if the category count is odd
+- Added Indonesian translation (thanks to Fadjar Tandabawana)
+- Added templates for the administration zone
+- Bugfix: go now printing templates object was not printed
+- Added ingredient deletion in dishes (ingredient is removed from associated dishes when it is deleted)
+- Dishes, ingredients, printers, users  and categories are kept in database after deletion for logging purposes, so they're never really deleted
+- Log is based on IDs instead of copied values, to assure items translations
+- Moved to mysql persistent connections
+- Added: non printed orders cannot be included in bills
+- User language changes are applied immediately
+- Added connected dishes list in ingredient page
+- Added global search in administration zone
+- Added orders print time information in editing page (to know customer waiting time)
+- Added coloured names based on elapsed time from order print in waiters section
+- Added elapsed time from print display in orders list in waiters section
+- Removed priority request from takeaway tables
+- Improved performance by MySQL queries optimisation (thanks to Rogelio Triviño)
+- language tables checker can now be limited to selected languages only (faster)
+- Bugfix: table checker doesn't need many passes to completely correct a table the job (records with same name were skipped)
+- Bugfix: language creator (developers function) now works properly
+- If a language value is not found, takes the corresponding value in the default language (can be disabled to show missing lang values)
+- Added link to select priority also by clicking on label
+- Added following keyboard shortcuts (work with firefox, mozilla and opera): left/right arrows to remove/add quantity from last order, letters to get alphabetical list, letters in mods page, letters to take associated dish in new dish (see letter in list), numbers to set priority in new dish
+- Moved some almost unused configuration options from the configuration page to the configuration file config.constants.inc.php
+- Bugfix: PDF report generator doesn't give access denied message anymore
+- Almost bugfix: password encryption set as option, default is standard md5 hash to avoid problems when copying db to other machines
+- Added text commands list in admin/manage zone to make it usable with text only browsers (that cannot see the dhtml droplists)
+- Bugfix: changed print line of windows printing code
+- Made possible to click also on labels in the modifications page
+- Added Romanian translation (thanks to Dorian Mladin)
+- Added global default priority (may be overridden by category default priority)
+- Bugfix: automatic association works again
+- Added table visibility
+- Added page cut at the end of printer test pages
+- Added "back to category" checkbox to easily decide on the fly if waiter has to come back to category or to orders list after order creation
+- Printers listbox in dishes admin allows choosing a bill printer
+
+0.8.4-beta3 to 0.8.4-beta4 (released 15 September 2004)
+- Added possibility to modify included ingredients
+- Added 'All' category for ingredients to make them available in all categories
+- Added user zones, to control access
+- Bugfix: service fee order was created with priority 1 instead of 0
+- Bugfix: orders beginning with escaped letters would not show from letters dishes list
+- Added user authentication with password (manage/waiter zone)
+- Added html color selector for categories
+- Added highlight color in management tables (works with mozilla-firefox)
+- Bugfix: printing system configuration didn't select saved option
+- Removed _waiter language files (all data moved to db)
+- Added template selector for each user
+- Added support for blowfish, MD5, extended and standard DES password encryption
+- Added priority suggestion based on category
+- Added other charsets support
+- Added table slicing (max rows per page) to administration pages
+- Added function to show only untranslated phrases in translators' page
+- Added language remover (developers only)
+- Added Spanish (Argentine) translation (thanks to Pablo Hugo Acevedo - a.k.a. Pabloha)
+- Extended translator search to languages (was only on phrase codes)
+- Added user disable functions
+- New dishes administration page with easier ingredients management
+- Added search box in administration pages
+- Added autocalc configuration page
+- Includer includes  only .php files
+- Database backup only on My Handy Restaurant tables
+- Added database restore tool
+- Bugfix: there were some problems with INSERT line having a newline command right after semicolon
+- Added possibility to insert equations instead of numbers in administration zone
+- Added possibility to delete directly from the list in administration
+- Hidden printing error reporting
+- Added Russian translation (thanks to Ivan Anochin - a.k.a. Ivanoez)
+- Distanced menu items of management zone menu
+- Bugfix: late invoices payments now possible
+- Added system info page
+- Bugfix: +/- from dishes mods weren't printed
+- Bugfix: override_autocalc ingredients flag wasn't working
+- Bugfix: fatal error if giving only customer name in takeaway tables
+- Added autocalc levels skipper in dishes
+- Moved bank accounts menu to accounting menu
+- Added upgrade checker, that allows only uninstalled upgrades to be installed
+- Bugfix: Added time selector in range for accounting reports to avoid wrong dates
+- Added MHR logo to connect page and changed CSS to white instead of yellow
+
+0.8.4-beta2 to 0.8.4-beta3 (prepared 31 July 2004, released 20 August 2004)
+- Fixed some Javascript issues (href js code removed)
+- Bugfix: errors if inserting new ingredient or dish with no name or price
+- Added currencies table
+- Added currency selector in conf
+- Totally corrected the [] -> [''] code (issued tons of notices from the PHP parser)
+- Partial check of waiters section to allow running with E_ALL PHP error reporting
+- Added PHP error reporting control
+- Bugfix: older mysql don't accept semicolon-ended sql queries (affected installer and upgrader)
+- Bugfix: logs receipts even if not printed
+- Bugfix: printing error reporting is not working (now works!)
+- Cashier tables list has new color to highlight generic dish not priced in table
+- Added letters list to select new dish
+- Added back to category feature when inserting new order
+- Some language data translated
+
+0.8.4-beta1 to 0.8.4-beta2 (released 27 July 2004)
+- Last modified order summary line
+- Invisible ingredients hidden
+- Bugfix: wrong link to changelog prevented changelog viewer to work
+- Added and improved toplist
+- Bugfix: modifications price was not set to zero when deleting the associated order
+- Added new function that tries to increase orders quantity instead of creating identical orders
+- Stock update functions inserted in waiter section
+- Added automatic reset button to default configuration values
+- Added new conf value to use people number with service fee price set to 0 (decoupling service fee/people number)
+- Inserted new takeaway template and interface
+- Added info on customer on takeaway page
+- New autoselect system when 1 customer found in takeaway
+- Added automatic check and warning for language tables in translators page
+
+0.8.3.1 to 0.8.4-beta1 (released 24 July 2004)
+- Upgrader bugfix: better behavior with ; and some other special character.
+- Updated upgrade sql files because of some non critical errors.
+- Added changelog viewer in system menu.
+- Added conf check to lang files number and lang db tables to avoid invalid language listing in select list.
+- Installer bugfix: better behavior with ; and some other special character.
+- Added tables per row conf setting for tables list page.
+- Administration tables ordered by user's language name instead of system code.
+- Waiters' section totally rewritten (performances improvement and better usability) (this is a huge change!).
+- Waiters' section templates system added.
+- Added easy delete feature in orders list page.
+- Waiters' orders tables ordered by user's language name instead of system code.
+- Added quantity droplist to select quantity when creating order
+- Improved lang exporting system
+- Added the possibility to click on the cells too
+- Reintroduced and improved order substitution
+- Printing commands only appear when available
+- Closing procedure improved: automatically shows the correct operation always
+- Closing procedure improved: not possible to close the table more than once
+- Closing procedure secured: the waiter cannot go back to table anyway
+- Quantities with one droplist only instead of tens and units droplists
+- Modifications section: now the modifications are saved automatically when selecting a new letter (no need to say ok and select letter next each time)
+- Table dissociation available to cashier and owner waiter
+- Many many code improvements in the waiters section that make the software more reliable and stable!
+- New status line that informs user about last operations status
+- Added possibility to set cells per row in tables list page (differentiated for cashier and waiter)
+- Added changelog viewer
+
+0.8.3 to 0.8.3.1 (released 26 May 2004)
+- All '<?' rewritten to '<?php' .
+- Write permission warning in configuration file writer page displayed only when required.
+- Fixed bug in translators' page (the translator would say that a lang record had not been found, although it was).
+- Added printers test page.
+- Added languages list in configuration page.
+- Added language name search in translators' page.
+- Added simulation mode in upgrade page.
+
+0.8.2 to 0.8.3 (released 20 May 2004)
+(Main changes only)
+- Possibility to install the system on 1 database (instead of 2 at least).
+- Complete translation of the system (99%).
+- New installer.
+- New upgrader (for future upgrades).
+- New management interface.
+- PDF reports.
+- Printers management.
+- Windows printing.
+- Translators' page.
+- Configuration page.
+- VAT categories.
+- Dishes/ingredients hiding option.
+- New installer.
+- Prints templates.
+- Printers' Drivers system.
+- XML language files output.
+- Database backup system.
+- Many minor new features and bugfixes, as ever...

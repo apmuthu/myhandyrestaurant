@@ -1,0 +1,46 @@
+MyHandyRestaurant
+http://www.myhandyrestaurant.org
+
+Author:
+Fabio 'Kilyerd' De Pascale - public@fabiolinux.com
+
+Abstract:
+Handheld-ready restaurant s/w to manage orders, bill printing, accouting, stock.
+
+My Handy Restaurant is a PHP-MySQL software written to help restaurant waiters and managers to take,
+print orders, print bills and invoices. Accounting and stock management are also included.
+The interface is handheld sized and platform independent (WinCE & Linux tested).
+TRY IT!
+
+Description:
+My Handy Restaurant is a software created to help restaurant waiters and managers in their job.
+
+Waiters can choose a restaurant table, assign orders to it and have them automatically printed on printers.
+"Normal" dishes could also be modificied, by adding or removing ingredients.
+Bills can be printed automatically, even for separated bills.
+The accounting section allows a restaurant manager to easily administrate the whole accounting (bank accounts, employees, suppliers, income) in an easy way.
+Stock managing is also available, and items quantity is automatically updated.
+
+The main key points of the system are the hardware independency, because of the HTTP client-server use, that could be found on most of the off-the-shelf handhelds solutions, and the strong integration between waiter/manager/stocking sections.
+
+My Handy restaurant is written in PHP server language and uses MySQL as working database.
+
+The interface is handheld sized and is written to be compatible with most of the handheld browsers, so to be totally platform independent.
+This allows a reduction of about 50% of the implementation costs, compared to usual restaurant handheld solutions.
+
+The project is distributed under the terms of the GNU General Public license (see LICENSE file).
+
+Installation:
+see file INSTALL.
+
+Developers, testers and key people:
+Fabio 'Kilyerd' De Pascale - public@fabiolinux.com - Main developer and mantainer
+Ivan 'IvanoeZ' Anochin - public@aliceposta.it - Tester and website mantainer
+
+Thanks to:
+http://www.jhall.demon.co.uk/currency/ - World currencies list
+Ivan 'IvanoeZ' Anochin - Russian translation
+Pablo Hugo Acevedo (Pabloha) - Spanish (Argentinian) translation
+Fadjar Tandabawana - Indonesian translation
+Dorian Mladin - Romanian translation
+All the other www.myhandyrestaurant.org forum users for their precious comments and suggestions

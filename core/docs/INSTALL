@@ -1,0 +1,42 @@
+Installation and basic usage notes.
+
+Before installing My Handy Restaurant, you should have a working installation of:
+a Web server (Apache is the only tested, but other should work, too);
+PHP server-side scripting language interpreter (http://www.php.net)
+MySQL database server (http://www.mysql.com)
+
+If you don't meet these requirements, please don't go on, because My Handy Restaurant is heavily dependant on those programs.
+
+There is an installation script that will build for you the db environment necessary to run the software.
+To use it go to My_Handy_Restaurant_dir/install.php, and click on "Write basic configuration file".
+
+Backup your data if you have any, and click on Yes.
+A complete common database will be created and filled with data.
+
+Now you should configure the system, by clicking on "Configure (or Reconfigure) the system" in the installation page.
+The most important thing is to immediately correct the "Debugging log file" and the "Errors log file" settings.
+
+After having set all the configuration options you want (and having sent them with the Submit button!), click on system->Accounting Databases.
+Here you should add one or more accounting databases that will be automatically created. The first accounting database can be the same as the main (non-accounting) one.
+
+My Handy Restaurant should be now properly working, but it may be not really sized for your needs.
+
+To configure it, explore carefully all the Menu options and add/remove/edit categories, dishes, ingredients, etc.
+
+Remember to add the printers you need in the system->printers page.
+
+If you want to access the dishes/ingredients/waiters/categories/tables databases and modify them,
+you should go to the management pages (menu tab), that are useful for this purpose.
+The order for creating an entirely new menu should be:
+1. New categories
+2. New ingredients
+3. New dishes
+any time. waiters
+any time. tables
+
+The management/accounting section is accessible via the manage/index.php page
+
+You may have more info about installation on My Handy Restaurant site (http://www.myhandyrestaurant.org), or by asking on the web forum, which is accessible via the main site.
+
+bye,
+Fabio 'Kilyerd' De Pascale
