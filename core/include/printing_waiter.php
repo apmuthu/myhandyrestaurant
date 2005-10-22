@@ -27,6 +27,17 @@
 * @copyright		Copyright 2003-2005, Fabio De Pascale
 */
 
+function printingToDo () {
+	$user = new user($_SESSION['userid']);
+	
+	if(printing_orders_to_print($_SESSION['sourceid'])
+		|| printing_orders_printed_category (2)
+		|| printing_orders_printed_category (3)
+		|| ($user->level[USER_BIT_CASHIER] && bill_orders_to_print ($_SESSION['sourceid']))
+	) return true;
+	else return false;
+}
+
 function printing_choose ($from_bill_print=false) {
 	global $tpl;
 
@@ -43,6 +54,15 @@ function printing_choose ($from_bill_print=false) {
 		table_closed_interface();
 		return 0;
 	}
+	
+	if(printing_orders_to_print($_SESSION['sourceid']) && !printing_orders_printed_category (2) && !printing_orders_printed_category (3)) {
+		$err=print_orders($_SESSION['sourceid']);
+		status_report ('ORDERS_PRINT',$err);
+		orders_list ();
+		return 0;
+	}
+	
+	
 	
 	$tpl -> set_waiter_template_file ('printing');
 	
@@ -63,22 +83,27 @@ function printing_commands(){
 		$output .= '<br />';
 	}
 
-	if(/* !$_SESSION['catprinted'][2] &&*/ printing_orders_printed_category (2)){
+	if(printing_orders_printed_category (2)){
 		$output .= '<a href="orders.php?command=print_category&amp;data[category]=2">'.ucfirst(phr('PRINT_GO_2')).'</a><br />'."\n";
 		$output .= '<br />';
 	}
 
-	if(/* !$_SESSION['catprinted'][3] && */ printing_orders_printed_category (3)){
+	if(printing_orders_printed_category (3)){
 		$output .= '<a href="orders.php?command=print_category&amp;data[category]=3">'.ucfirst(phr('PRINT_GO_3')).'</a><br />'."\n";
 		$output .= '<br />';
 	}
 
-	if(bill_orders_to_print ($_SESSION['sourceid'])) {
-		$output .= "<a href=\"orders.php?command=bill_select\">".ucfirst(phr('PRINT_SEPARATED_BILLS'))."</a><br />\n";
-	}
-	
 	$user = new user($_SESSION['userid']);
 	
+	if ($user->level[USER_BIT_CASHIER]) {
+		if(bill_orders_to_print ($_SESSION['sourceid'])) {
+			$output .= "<a href=\"orders.php?command=bill_select\">".ucfirst(phr('PRINT_SEPARATED_BILLS'))."</a><br />\n";
+		}
+	}
+	
+	/*
+	$user = new user($_SESSION['userid']);
+
 	if ($user->level[USER_BIT_CASHIER]) {
 		$output .= '
 	<br />
@@ -91,6 +116,7 @@ function printing_commands(){
 	';
 		}
 	}
+	*/
 	
 	return $output;
 }
@@ -380,8 +406,32 @@ function print_test_page(){
 	return 0;
 }
 
-function print_line($destid,$msg){
-	$debug = _FUNCTION_.' - Printing to destid '.$destid.' - line '.$msg.' '."\n"; 
+function printSaveToLog ($msg,$destid)
+{
+	// database not found - non fatal error
+	$db=get_conf(__FILE__,__LINE__,'ticketsLogDB');
+	if(!commonTableExists($db,'#prefix#tickets_log')) return 0;
+
+	$query = "INSERT INTO #prefix#tickets_log (`text`,`date`,`destination`) VALUES ('$msg',NOW(),'$destid')";
+	$res = database_query($query,__FILE__,__LINE__,$db);
+	if (!$res) return 0;
+
+	return mysql_insert_id ();
+}
+
+function printAddTicketID($msg,$idLog)
+{
+	if(!CONF_PRINT_TICKET_ID) return $msg;
+	
+	$tmpMsg = "Ticket ID: $idLog";
+	//$msg = eregi_replace ("{[^}]*ticketID[^}]*}", "$dest_msg", $msg);
+	$msg = preg_replace("/\{.*?".'ticketID'.".*?\}/",$tmpMsg,$msg);
+	
+	return $msg;
+}
+
+function print_line($destid,$msg,$saveToLog=true){
+	$debug = __FUNCTION__.' - Printing to destid '.$destid.' - line '.$msg.' '."\n"; 
 	debug_msg(__FILE__,__LINE__,$debug);
 	
 	if($destid=="all") {
@@ -400,20 +450,27 @@ function print_line($destid,$msg){
 	
 	if(CONF_DEBUG_PRINT_TICKET_DEST) {
 		$destname=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests','name',$destid);
-		$dest_msg.="destid: $destid";
+		$dest_msg ="destid: $destid";
 		$dest_msg.="\ndestname: $destname";
 		$msg = eregi_replace ("{[^}]*destination[^}]*}", "$dest_msg", $msg);
 		$msg=preg_replace("/\{.*?".'destination'.".*?\}/",$dest_msg,$msg);
 	}
 
-
 	$driver=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests','driver',$destid);
 
-	$msg = driver_apply($driver,$msg);
 
-	if(CONF_DEBUG_PRINT_DISPLAY_MSG) {
-		echo "<br>".nl2br(htmlentities($msg))."<br>\n";
+	//if(CONF_DEBUG_PRINT_DISPLAY_MSG) echo "<br>".nl2br(htmlentities($msg))."<br>\n";
+	
+	if ($saveToLog) if($idLog = printSaveToLog ($msg,$destid))
+	{
+		$msg = printAddTicketID($msg,$idLog);
 	}
+	
+	//if(CONF_DEBUG_PRINT_DISPLAY_MSG) echo "<br>".nl2br(htmlentities($msg))."<br>\n";
+	
+	$msg = driver_apply($driver,$msg);
+	
+	if(CONF_DEBUG_PRINT_DISPLAY_MSG) echo "<br>".nl2br(htmlentities($msg))."<br>\n";
 	
 	// Next commented code is born to drive an external beeper.
 	// we should still work on the hardware.
@@ -423,9 +480,7 @@ function print_line($destid,$msg){
 	//	$msg.=chr(28);
 	//}
 
-	if(CONF_DEBUG_DONT_PRINT){
-		return 0;
-	}
+	if(CONF_DEBUG_DONT_PRINT) return 0;
 
 	$dest=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests','dest',$destid);
 	$result = print_line_os_chooser($msg,$dest);
@@ -472,6 +527,11 @@ function print_line_win($value,$dest) {
 	
 	if(!$handle) return ERR_COULD_NOT_OPEN_PRINTER;
 
+	//echo 'opened printer';
+
+	printer_set_option($handle, PRINTER_MODE, "RAW");
+	//printer_set_option($handle, PRINTER_TITLE, $title);
+	
 	$debug = __FUNCTION__.' - Windows Printing to dest '.$dest.' - line '.$value.' '."\n"; 
 	debug_msg(__FILE__,__LINE__,$debug);
 	
@@ -480,7 +540,7 @@ function print_line_win($value,$dest) {
 	printer_start_doc($handle, $title);
 	printer_start_page($handle);
 
-	if($res!=printer_write($handle, $value)) return ERR_PRINTING_ERROR;
+	if(!printer_write($handle, $value)) return ERR_PRINTING_ERROR;
 
 	printer_end_page($handle);
 	printer_end_doc($handle);
@@ -550,8 +610,12 @@ function print_ticket($orderid,$deleted=false) {
 	$user = new user($_SESSION['userid']);
 	$output['waiter']=ucfirst(lang_get($dest_language,'PRINTS_WAITER')).": ".$user->data['name'];
 	$tpl_print->assign("waiter", $output['waiter']);
-	$output['priority']=ucfirst(lang_get($dest_language,'PRINTS_PRIORITY')).": ".$priority."\n";
-	$tpl_print->assign("priority", $output['priority']);
+	if((CONF_PRINT_ONLY_HIGH_PRIORITY_NUMBER && $priority!=1)
+		|| !CONF_PRINT_ONLY_HIGH_PRIORITY_NUMBER)
+		{
+		$output['priority']=ucfirst(lang_get($dest_language,'PRINTS_PRIORITY')).": ".$priority."\n";
+		$tpl_print->assign("priority", $output['priority']);
+	}
 	$output['people']=ucfirst(lang_get($dest_language,'PRINTS_PEOPLE')).": ".table_people_number($arr['sourceid'])."\n";
 	$tpl_print->assign("people", $output['people']);
 	
@@ -623,6 +687,7 @@ other - mysql error number
 	$tpl_print = new template;
 	$output['orders']='';
 	$msg="";
+	$tablePrinted=false;
 	while ($arr = mysql_fetch_array ($res)) {
 
 		$oldassociated_id=$newassociated_id;
@@ -655,6 +720,7 @@ other - mysql error number
 				$tpl_print->assign("date", printer_print_date());
 				$tpl_print->assign("gonow", printer_print_gonow($oldpriority,$dest_language));
 				$tpl_print->assign("page_cut", printer_print_cut());
+				$tablePrinted=false;
 				
 				// strips the last newline that has been put
 				$output['orders'] = substr ($output['orders'], 0, strlen($output['orders'])-1);
@@ -682,16 +748,17 @@ other - mysql error number
 				
 			} elseif($priority!=$oldpriority && $oldpriority!="") {
 				$tpl_print->assign("date", printer_print_date());
-				$tpl_print->assign("gonow", printer_print_gonow($oldpriority,$dest_language));
-				$tpl_print->assign("page_cut", printer_print_cut());
+				if(!CONF_PRINT_TICKETS_ONE_PAGE_PER_TABLE) $tpl_print->assign("page_cut", printer_print_cut());
+				else $tpl_print->assign("page_cut", '');
 				
 				// strips the last newline that has been put
 				$output['orders'] = substr ($output['orders'], 0, strlen($output['orders'])-1);
-				
+			
+				$tpl_print->assign("gonow", printer_print_gonow($oldpriority,$dest_language));
 				if (table_is_takeaway($sourceid)) $print_tpl_file='ticket_takeaway';
 				else $print_tpl_file='ticket';
 				if($err = $tpl_print->set_print_template_file($destid,$print_tpl_file)) return $err;
-				
+			
 				if($err=$tpl_print->parse()) {
 					$msg="Error in ".__FUNCTION__." - ";
 					$msg.='error: '.$err."\n";
@@ -710,36 +777,45 @@ other - mysql error number
 
 			if(table_is_takeaway($sourceid)) {
 				$takeaway_data = takeaway_get_customer_data($sourceid);
-				$output['takeaway'] = ucfirst(lang_get($dest_language,'PRINTS_TAKEAWAY'))." - ";
-				$output['takeaway'] .= $takeaway_data['takeaway_hour'].":".$takeaway_data['takeaway_minute']."\n";
+				$output['takeaway'] = ucfirst(lang_get($dest_language,'PRINTS_TAKEAWAY'));
+				if(($takeaway_data['takeaway_unixtime']-time())>CONF_MINUTES_BEFORE_PRINTING_TAKEAWAY*60) $output['takeaway'] .= " - ".$takeaway_data['takeaway_hour'].":".$takeaway_data['takeaway_minute']."\n";
 				$output['takeaway'] .= $takeaway_data['takeaway_surname']."\n";
 				$tpl_print->assign("takeaway", $output['takeaway']);
 			}
-			$output['table']=ucfirst(lang_get($dest_language,'PRINTS_TABLE')).": ".$tablenum;
-			$tpl_print->assign("table", $output['table']);
-			$user = new user($_SESSION['userid']);
-			$output['waiter']=ucfirst(lang_get($dest_language,'PRINTS_WAITER')).": ".$user->data['name'];
-			$tpl_print->assign("waiter", $output['waiter']);
-			$output['priority']=ucfirst(lang_get($dest_language,'PRINTS_PRIORITY')).": ".$priority."\n";
-			$tpl_print->assign("priority", $output['priority']);
-			$output['people']=ucfirst(lang_get($dest_language,'PRINTS_PEOPLE')).": ".table_people_number($sourceid)."\n";
-			$tpl_print->assign("people", $output['people']);
+			if(!$tablePrinted)
+			{
+				$output['table']=ucfirst(lang_get($dest_language,'PRINTS_TABLE')).": ".$tablenum;
+				$tpl_print->assign("table", $output['table']);
+				$user = new user($_SESSION['userid']);
+				$output['waiter']=ucfirst(lang_get($dest_language,'PRINTS_WAITER')).": ".$user->data['name'];
+				$tpl_print->assign("waiter", $output['waiter']);
+				$output['people']=ucfirst(lang_get($dest_language,'PRINTS_PEOPLE')).": ".table_people_number($sourceid)."\n";
+				$tpl_print->assign("people", $output['people']);
 			
-			$table = new table($sourceid);
-			$table->fetch_data(true);
-			if ($cust_id=$table->data['customer']) {
-				$cust = new customer ($cust_id);
-				$output['customer']=ucfirst(lang_get($dest_language,'CUSTOMER')).": ".$cust -> data ['surname'].' '.$cust -> data ['name'];
-				$tpl_print->assign("customer_name", $output['customer']);
-				$output['customer']=$cust -> data ['address'];
-				$tpl_print->assign("customer_address", $output['customer']);
-				$output['customer']=$cust -> data ['zip'];
-				$tpl_print->assign("customer_zip_code", $output['customer']);
-				$output['customer']=$cust -> data ['city'];
-				$tpl_print->assign("customer_city", $output['customer']);
-				$output['customer']=ucfirst(lang_get($dest_language,'VAT_ACCOUNT')).": ".$cust -> data ['vat_account'];
-				$tpl_print->assign("customer_vat_account", $output['customer']);
+				$table = new table($sourceid);
+				$table->fetch_data(true);
+				if ($cust_id=$table->data['customer']) {
+					$cust = new customer ($cust_id);
+					$output['customer']=ucfirst(lang_get($dest_language,'CUSTOMER')).": ".$cust -> data ['surname'].' '.$cust -> data ['name'];
+					$tpl_print->assign("customer_name", $output['customer']);
+					$output['customer']=$cust -> data ['address'];
+					$tpl_print->assign("customer_address", $output['customer']);
+					$output['customer']=$cust -> data ['zip'];
+					$tpl_print->assign("customer_zip_code", $output['customer']);
+					$output['customer']=$cust -> data ['city'];
+					$tpl_print->assign("customer_city", $output['customer']);
+					$output['customer']=ucfirst(lang_get($dest_language,'VAT_ACCOUNT')).": ".$cust -> data ['vat_account'];
+					$tpl_print->assign("customer_vat_account", $output['customer']);
+				}
+				$tablePrinted=true;
 			}
+			if((CONF_PRINT_ONLY_HIGH_PRIORITY_NUMBER && $priority!=1)
+				|| !CONF_PRINT_ONLY_HIGH_PRIORITY_NUMBER)
+			{
+				$output['priority']=ucfirst(lang_get($dest_language,'PRINTS_PRIORITY')).": ".$priority."\n";
+				$tpl_print->assign("priority", $output['priority']);
+			}
+			
 		}
 		
 		
@@ -755,9 +831,6 @@ other - mysql error number
 			}
 		}
 		
-		if(CONF_PRINT_BARCODES && $arr['dishid']!=MOD_ID){
-			//$output['orders'].= print_barcode($newassociated_id);
-		}
 		$tpl_print->assign("orders", $output['orders']);
 	}
 
@@ -911,7 +984,7 @@ function receipt_delete($accountdb,$receipt_id){
 	return 0;
 }
 
-
+/*
 function receipt_update_amounts($accountdb,$total,$receipt_id){
 	$total_total=$total['total'];
 	$taxable=$total['taxable'];
@@ -930,5 +1003,5 @@ function receipt_update_amounts($accountdb,$total,$receipt_id){
 	}
 	return 0;
 }
-
+*/
 ?>

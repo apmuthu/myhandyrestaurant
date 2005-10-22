@@ -56,7 +56,7 @@ class category extends object {
 				$table.`id`,
 				IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
 				RPAD('".ucphr('CATEGORIES')."',30,' ') as `table`,
-				".TABLE_CATEGORIES." as `table_id`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
 				 JOIN `$lang_table`
 				WHERE $table.`deleted`='0'

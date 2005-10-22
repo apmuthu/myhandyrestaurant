@@ -54,7 +54,8 @@ if(!access_allowed(USER_BIT_WAITER) && !access_allowed(USER_BIT_CASHIER)) {
 if($user->level[USER_BIT_CASHIER])
 	$tpl -> append ('tables',tables_list_all(1,1));
 
-$tpl -> append ('tables',tables_list_all(1,2));
+if(!$user->level[USER_BIT_CASHIER])
+	$tpl -> append ('tables',tables_list_all(1,2));
 
 if($user->level[USER_BIT_CASHIER]) $cols=get_conf(__FILE__,__LINE__,'menu_tables_per_row_cashier');
 else $cols=get_conf(__FILE__,__LINE__,'menu_tables_per_row_waiter');

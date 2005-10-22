@@ -73,7 +73,7 @@ if(!in_array(basename($_SERVER['SCRIPT_NAME']),$allowed_not_upgraded) && $dbman-
 <head>
 	<script type="text/javascript" language="JavaScript" src="./generic.js"></script>
 	<link rel="stylesheet" href="./styles.css.php" type="text/css">
-	<title>My Handy Restaurant Home Page</title>
+	<title><?php echo ucphr('MHR_HOME_PAGE'); ?></title>
 </head>
 <body class=mgmt_body>
 <div class="aligncenter">
@@ -81,20 +81,19 @@ if(!in_array(basename($_SERVER['SCRIPT_NAME']),$allowed_not_upgraded) && $dbman-
 </div>
 <p>
 <br/>
-<a href="waiter/"><b>Waiters' section</b></a><br/> Orders management.
+<a href="waiter/"><b><?php echo ucphr('WAITERS_SECTION').'</b></a><br/>'.ucphr('ORDERS_MANAGEMENT'); ?>.
 <br/>
 <br/>
-<a href="admin/connect.php?command=none"><b>Management section</b></a><br/> Accounting, statistics, stock and configurations.
+<a href="admin/connect.php?command=none"><b><?php echo ucphr('MANAGEMENT_SECTION').'</b></a><br/>'.ucphr('MANAGEMENT_SECTION_DESC'); ?>.
 <br/>
 <br/>
-<a href="http://www.myhandyrestaurant.org/forum/"><b>Forum</b></a><br/> Support, bug reports, comments and any other feedback.
+<a href="http://www.myhandyrestaurant.org/forum/"><b><?php echo ucphr('FORUM').'</b></a><br/>'.ucphr('FORUM_DESC'); ?>.
 <br/>
 <?php
 	if (CONF_DEBUG) {
 		$servrd=$_SERVER['HTTP_USER_AGENT'];
 		display_todo($servrd);
 	}
-
 ?>
 </p>
 </body>

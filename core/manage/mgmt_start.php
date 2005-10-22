@@ -60,6 +60,9 @@ if(!$header_printed){
 
 	start_language ();
 
+	$modManager = new modManager;
+	if(is_array($modules)) $modManager -> addModule ($modules);
+	
 	$found_accounting_db=false;
 
 	$table=$GLOBALS['table_prefix'].'accounting_dbs';
@@ -88,7 +91,7 @@ if(!$header_printed){
 		die($error_msg);
 	}
 
-	$_SESSION['mgmt_db']=common_find_first_db($_SESSION['mgmt_db']);
+	$_SESSION['mgmt_db']=commonFindFirstAccountingDB($_SESSION['mgmt_db']);
 
 //echo "first_db found:".$_SESSION['mgmt_db'];
 
@@ -114,7 +117,7 @@ if(!$header_printed){
 //echo "mgmt_db: ".$_SESSION['mgmt_db']."<br>\n";
 
 	if(!isset($_SESSION['mgmt_db'])) {
-		$_SESSION['mgmt_db']=common_find_first_db();
+		$_SESSION['mgmt_db']=commonFindFirstAccountingDB();
 	}
 
 

@@ -33,8 +33,12 @@ class stock_movement extends object {
 	var $only_obj;
 	
 	function stock_movement ($id=0) {
-		$this -> db = 'common';
+		$this -> db = get_conf(__FILE__,__LINE__,'stockDB');
 		$this->table=$GLOBALS['table_prefix'].'stock_movements';
+		
+		if(!commonTableExists($this->db,$this->table)) $this->disabled=true;
+		else $this->disabled=false;
+		
 		$this->id=$id;
 		$this -> title = ucphr('STOCK_MOVEMENTS');
 		$this -> no_name = true;
@@ -47,6 +51,7 @@ class stock_movement extends object {
 		$this->fields_width=array(	'name'=>'40%',
 								'dish_name'=>'40%',
 								'timestamp'=>'20%');
+		$this->hide=array(		'ordertimestamp');
 		$this->fields_names=array(	'id'=>ucphr('ID'),
 								'timestamp'=>ucphr('TIME'),
 								'name'=>ucphr('NAME'),
@@ -77,22 +82,50 @@ class stock_movement extends object {
 		}
 	}
 	
+	function list_standard_query_edit () {
+		$lang_table = $this->table."_".$_SESSION['language'];
+		$query = '';
+		
+		if(empty($this->search) && isset($this->flag_delete) && $this->flag_delete) $query.=" AND ".$this->table.".deleted='0'";
+		
+		if(empty($this->orderby)) {
+			if (isset($this->default_orderby)) $this->orderby=$this->default_orderby;
+			else $this->orderby='name';
+			if (isset($this->default_sort)) $this->sort=$this->default_sort;
+			else $this->sort='asc';
+		}
+		
+		if($this->orderby) {
+			if($this->orderby=="timestamp") $this->orderby="ordertimestamp";
+			
+			$query.=" ORDER BY `".$this->orderby."`";
+			if(strtolower($this->sort)=='asc' || strtolower($this->sort)=='desc') $query.=" ".$this->sort;
+			
+			if($this->orderby=="ordertimestamp") $this->orderby="timestamp";
+		
+		}
+		
+		return $query;
+	}
+	
 	function list_query_all () {
 		if(isset($_REQUEST['data']['only_obj']) && $_REQUEST['data']['only_obj']) $this -> only_obj = $_REQUEST['data']['only_obj'];
 		if(isset($_REQUEST['data']['only_dish']) && $_REQUEST['data']['only_dish']) $this -> only_dish = $_REQUEST['data']['only_dish'];
 		
-		$table = "#prefix#stock_movements";
-		$stock_table = "#prefix#stock_objects";
-		$ingred_table = "#prefix#ingreds";
-		$ingred_lang_table = "#prefix#ingreds_".$_SESSION['language'];
-		$dish_table = "#prefix#dishes";
-		$dish_lang_table = "#prefix#dishes_".$_SESSION['language'];
+		$dbCommon=$_SESSION['common_db'];
+		$table = "`".$this->db."`.`#prefix#stock_movements`";
+		$stock_table = "`".$this->db."`.`#prefix#stock_objects`";
+		$ingred_table = "`$dbCommon`.`#prefix#ingreds`";
+		$ingred_lang_table = "`$dbCommon`.`#prefix#ingreds_".$_SESSION['language']."`";
+		$dish_table = "`$dbCommon`.`#prefix#dishes`";
+		$dish_lang_table = "`$dbCommon`.`#prefix#dishes_".$_SESSION['language']."`";
 		
 		$this->fields_show=array('id','timestamp','obj_id','dish_id','dish_quantity','unit_type','quantity','value','user');
 		
 		$query="SELECT
 				$table.`id`,
 				DATE_FORMAT($table.`timestamp`,'%e/%c/%Y %T') as 'timestamp',
+				`timestamp` as 'ordertimestamp',
 				IF($ingred_lang_table.`table_name`='' OR $ingred_lang_table.`table_name` IS NULL,$ingred_table.`name`,$ingred_lang_table.`table_name`) as `name`,
 				$table.`obj_id`,
 				IF($dish_lang_table.`table_name`='' OR $dish_lang_table.`table_name` IS NULL,$dish_table.`name`,$dish_lang_table.`table_name`) as `dish_name`,
@@ -101,12 +134,12 @@ class stock_movement extends object {
 				$table.`unit_type`,
 				$table.`quantity`,
 				ROUND($table.`value`,2) as `value`
-				FROM `$table`
-				LEFT JOIN `$dish_table` ON $table.`dish_id`=$dish_table.id
-				LEFT JOIN `$dish_lang_table` ON $table.`dish_id`=$dish_lang_table.table_id,
-				`$stock_table`,
-				`$ingred_table`,
-				`$ingred_lang_table`
+				FROM $table
+				LEFT JOIN $dish_table ON $table.`dish_id`=$dish_table.id
+				LEFT JOIN $dish_lang_table ON $table.`dish_id`=$dish_lang_table.table_id,
+				$stock_table,
+				$ingred_table,
+				$ingred_lang_table
 				WHERE $stock_table.`id`=$table.`obj_id`
 				AND $ingred_table.`id`=$stock_table.`ref_id`
 				AND $ingred_lang_table.`table_id`=$stock_table.`ref_id`
@@ -161,8 +194,9 @@ class stock_movement extends object {
 	
 	function delete_all_from_obj ($obj_id) {
 		$query="SELECT * FROM `".$this->table."` WHERE `obj_id`='".$obj_id."'";
-		$res=common_query($query,__FILE__,__LINE__);
-		if(!$res) return mysql_errno();
+		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
+		if(!$res) return ERR_MYSQL;
 		
 		while ($arr=mysql_fetch_array($res)) {
 			$mov = new stock_movement ($arr['id']);
@@ -183,13 +217,18 @@ class stock_movement extends object {
 		if($input_data['quantity']==="") {
 			$msg=ucphr('CHECK_QUANTITY');
 		}
+		
 		if(!isset($input_data['unit_type'])) $input_data['unit_type'] = get_unit_from_eq ($input_data['quantity']);		// should before modification of quantity
 		$input_data['quantity'] = convert_units ($input_data['quantity']);
 		
-		$stock = new stock_object ($input_data['obj_id']);
-		if((($stock->data['quantity']+$input_data['quantity'])<0) && $stock->data['quantity']>=0) {
-			$msg=ucphr('CHECK_QUANTITY');
-		}
+		/*
+		The following causes a bug if the stock quantity is low.
+		Probably we should trap it, but it's not implemented yet, so better leaving it commented.
+		*/
+		// $stock = new stock_object ($input_data['obj_id']);
+		// if((($stock->data['quantity']+$input_data['quantity'])<0) && $stock->data['quantity']>=0) {
+		// 	$msg=ucphr('CHECK_QUANTITY');
+		// }
 
 		$input_data['user'] = $_SESSION['userid'];
 		if ($msg) {
@@ -312,8 +351,9 @@ class stock_movement extends object {
 		if($this->id) {
 			$editing=1;
 			$query="SELECT * FROM `".$this->table."` WHERE `id`='".$this->id."'";
-			$res=common_query($query,__FILE__,__LINE__);
-			if(!$res) return mysql_errno();
+			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
+			if(!$res) return ERR_MYSQL;
 			
 			$arr=mysql_fetch_array($res);
 		} else {

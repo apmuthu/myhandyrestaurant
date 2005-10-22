@@ -105,7 +105,7 @@ if(!$header_printed){
 	if(isset($_REQUEST['mgmt_db_number'])){
 		$_SESSION['mgmt_db']=$_REQUEST['mgmt_db_number'];
 	} elseif(!isset($_SESSION['mgmt_db'])) {
-		$_SESSION['mgmt_db']=common_find_first_db();
+		$_SESSION['mgmt_db']=commonFindFirstAccountingDB();
 	}
 
 	/*****************************************************************

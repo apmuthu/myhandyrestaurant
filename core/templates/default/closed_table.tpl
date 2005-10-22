@@ -6,6 +6,7 @@
 	<body>
 		{scripts}
 		<center>
+		{commands}
 		{people_number}
 		{messages}
 		{navbar}

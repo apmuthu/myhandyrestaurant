@@ -5,6 +5,7 @@
 	</head>
 	<body>
 		{scripts}
+		
 		<center>
 		{messages}
 		{waiter_selection}

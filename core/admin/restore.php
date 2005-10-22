@@ -90,7 +90,7 @@ location: ".basename($_SERVER['SCRIPT_NAME'])."?command=resume<br>\n";
 		$err=0;
 		$restored=false;
 		if(is_array($_FILES['userfile']) && !$_FILES['userfile']['error'] && is_file($file=$_FILES['userfile']['tmp_name'])) {
-			$file=$_FILES['userfile']['tmp_name'];
+			//$file=$_FILES['userfile']['tmp_name'];
 			if(is_readable($file)) {
 				$err=$dbman->upgrade_from_file($file,$verbosity,$simulate);
 				$restored=true;

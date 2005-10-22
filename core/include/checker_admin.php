@@ -31,7 +31,8 @@ function checker_check_only ($devel=false,$langs=array()) {
 	$to_check_user=array(
 	'ingreds',
 	'dishes',
-	'categories'
+	'categories',
+	'mgmt_people_types'
 	);
 	
 	$to_check_admin=array(
@@ -40,7 +41,6 @@ function checker_check_only ($devel=false,$langs=array()) {
 	'dishes',
 	'categories',
 	'lang',
-	'mgmt_people_types',
 	'mgmt_types'
 	);
 	

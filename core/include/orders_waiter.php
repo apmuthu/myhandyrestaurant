@@ -28,18 +28,17 @@
 */
 
 function order_last_modified_mods () {
-if (!$deleted
-				&& $arr['printed']==NULL
-				&& $arr['dishid']!=MOD_ID
-				&& $arr['dishid']!=SERVICE_ID) {
-			$link = 'orders.php?command=listmods&amp;data[id]='.$arr['associated_id'];
-			$output .= '
-		<td bgcolor="'.$class.'" onclick="redir(\''.$link.'\');">
-			<a href="'.$link.'">+ -</a>
-		</td>';
-
-		
-		}
+	if (!$deleted
+		&& $arr['printed']==NULL
+		&& $arr['dishid']!=MOD_ID
+		&& $arr['dishid']!=SERVICE_ID) {
+				$link = 'orders.php?command=listmods&amp;data[id]='.$arr['associated_id'];
+				$output .= '
+			<td bgcolor="'.$class.'" onclick="redir(\''.$link.'\');">
+				<a href="'.$link.'">+ -</a>
+			</td>';
+			
+	}
 }
 
 function order_last_modified_links () {
@@ -191,17 +190,6 @@ function dish_list ($start_data) {
 	
 		$tmp = keys_dishlist_letters ();
 		$tpl -> append ('scripts',$tmp);
-	} elseif (isset($start_data['idsystem'])){
-		$tmp = dishlist_form_start(false);
-		$tpl -> assign ('formstart',$tmp);
-		$tmp = dishlist_form_end();
-		$tpl -> assign ('formend',$tmp);
-		$tmp = priority_radio($start_data);
-		$tpl -> assign ('priority',$tmp);
-		$tmp = quantity_list($start_data);
-		$tpl -> assign ('quantity',$tmp);
-		$tmp = input_dish_id ($start_data);
-		$tpl -> assign ('dishes_list',$tmp);
 	} else {
 		$tmp = categories_list($start_data);
 		$tpl -> assign ('categories',$tmp);
@@ -246,12 +234,13 @@ function order_price_modify($id) {
 	$price=$pricetot;
 	$price=sprintf("%01.2f",$price);
 
-	$tmp='';
+	$tmp = '';
 	if($generic) $tmp .= ucfirst(phr('GENERIC_PRICE_DESCRIPTION'))."<br/>\n";
 	$tmp .= ucfirst(phr('GENERIC_PRICE_INSTRUCTION')).' '.ucfirst(phr('UPDATE_PRICE')).'<br />
 	<form action="orders.php" method="post" name="form1">
 	<input type="hidden" name="command" value="update">
 	<input type="hidden" name="data[id]" value="'.$id.'">
+	<input type="hidden" name="data[override_price]" value="1">
 	<input type="hidden" name="data[quantity]" value="'.$quantity.'">
 	<input type="text" size="8" maxlength="8" name="data[price]" value="'.$price.'"><br/>
 	<input type="submit" value="'.ucfirst(phr('UPDATE_PRICE')).'">
@@ -284,33 +273,27 @@ function order_is_mod($id){
 	return 0;
 }
 
-function order_has_mods($id){
-	$query="SELECT * FROM `#prefix#orders` WHERE `associated_id`='$id' AND `id`!='$id'";
-	$res=common_query($query,__FILE__,__LINE__);
-	if(!$res) return ERR_MYSQL;
-
-	return mysql_num_rows($res);
-}
-
 function order_find_incrementable ($dishid,$priority){
-	$query="SELECT * FROM `#prefix#orders`
-	 WHERE `sourceid`='".$_SESSION['sourceid']."'
-	 AND `dishid`='$dishid'";
-	 $res=common_query($query,__FILE__,__LINE__);
-	if(!$res) return ERR_MYSQL;
-
+	$query="SELECT main.*,
+	tmp.id as ass_order_id
+	FROM `#prefix#orders` as main
+	LEFT JOIN `#prefix#orders` as tmp ON tmp.associated_id=main.id AND tmp.id!=main.id
+	WHERE main.`sourceid`='".$_SESSION['sourceid']."'
+	AND main.`dishid`='$dishid'
+	AND main.priority='$priority'
+	AND main.suspend='0'
+	AND main.extra_care='0'
+	AND main.printed IS NULL
+	AND main.deleted='0'
+	";
+	$res=common_query($query,__FILE__,__LINE__);
+	if(!$res) return 0;
+	
 	while ($arr = mysql_fetch_array($res)) {
-		if(!order_has_mods($arr['id'])
-			&& $arr['priority']==$priority
-			&& $arr['suspend']==0
-			&& $arr['extra_care']==0
-			&& $arr['printed']==NULL
-			&& $arr['deleted']==0) return $arr['id'];
+		if($arr['ass_order_id']==NULL) return $arr['id'];
 	}
-
 	return 0;
 }
-
 
 function order_found_generic_not_priced($sourceid){
 	$query="SELECT * FROM `#prefix#orders`
@@ -350,7 +333,9 @@ function price_calc ($num,$correction=0) {
 	ksort($autocalc);
 	
 	$maxquantity = $maxquantity - $correction;
-// echo '$maxquantity: '.$maxquantity.'<br>';
+	if ($maxquantity < 0) $maxquantity = 0;
+	
+//echo '$maxquantity: '.$maxquantity.'<br>';
 	
 	//echo 'pre: '.var_dump_table($autocalc);
 	foreach($autocalc as $key => $value) {
@@ -396,6 +381,7 @@ function price_calc ($num,$correction=0) {
 function orders_create ($dishid,$input_data=array()) {
 	global $tpl;
 
+	
 	if(!isset($input_data['quantity'])) {
 		$input_data['quantity']=1;
 		echo '<br>quantity not set!';
@@ -423,7 +409,7 @@ function orders_create ($dishid,$input_data=array()) {
 	toplist_insert ($dishid, $input_data['quantity']);
 	
 	//don't move stock from here!
-	if(class_exists('stock_object') && isset($input_data['quantity'])) {
+	if(class_exists('stock_object')  && stock_object::stockEnabled() && isset($input_data['quantity'])) {
 		$stock = new stock_object;
 		$stock -> silent = true;
 		$stock -> remove_from_waiter($ord->id,$input_data['quantity']);
@@ -558,11 +544,19 @@ function orders_edit_printed_info ($ord) {
 }
 
 function orders_print_elapsed_time ($ord,$string=false) {
-	if ($ord -> data['dishid'] == SERVICE_ID) return -1;
-	if($ord->data['printed']==NULL) return -1;
-	if($ord->data['deleted']) return -1;
-
-	$elapsed_time=time() - strtotime($ord->data['printed']);
+	if (is_object($ord)) {
+		if ($ord->data['dishid'] == SERVICE_ID) return -1;
+		if($ord->data['printed'] == NULL) return -1;
+		if($ord->data['deleted']) return -1;
+		$printed = $ord->data['printed'];
+	} elseif (is_array($ord)) {
+		if ($ord['dishid'] == SERVICE_ID) return -1;
+		if($ord['printed'] == NULL) return -1;
+		if($ord['deleted']) return -1;
+		$printed = $ord['printed'];
+	} else return -1;
+	
+	$elapsed_time=time() - strtotime($printed);
 	$elapsed_time = round($elapsed_time/60,0);
 	
 	// number is requested, so we return minutes
@@ -700,13 +694,15 @@ function orders_update ($start_data) {
 	// toplist update code
 	if(!isset($start_data['quantity'])) $start_data['quantity']=0;
 	
-	// insert all the modules interfaces for order creation here
+	// insert all the modules interfaces for order update here
 	toplist_update ($ord -> data['dishid'], $ord->data['quantity'], $start_data['quantity']);
-	if(class_exists('stock_object')) {
+	
+	if(class_exists('stock_object') && stock_object::stockEnabled()) {
 		$stock = new stock_object;
 		$stock -> silent = true;
 		$stock -> remove_from_waiter($id,$start_data['quantity']);
 	}
+	
 	// set_stock_from_id($id,$start_data['quantity']);
 	// end interfaces
 
@@ -745,7 +741,7 @@ function orders_delete ($start_data) {
 	} else {
 		// insert all the modules interfaces for order creation here
 		toplist_delete($ord -> data['dishid'],$ord -> data['quantity']);
-		if(class_exists('stock_object')) {
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
 			$stock = new stock_object;
 			$stock -> silent = true;
 			$stock -> remove_from_waiter($id,0);
@@ -801,16 +797,18 @@ function orders_service_fee_questions () {
 function orders_list () {
 	global $tpl;
 	
+	$user = new user($_SESSION['userid']);
+	
 	// use session to decide wether to show the orders list or not
 	// TODO: add get_conf here
-	if(!isset($_SESSION['show_orders_list'])) $_SESSION['show_orders_list']=false;
+	if(!isset($_SESSION['show_orders_list']) && $user->level[USER_BIT_CASHIER]) $_SESSION['show_orders_list']=true;
+	elseif(!isset($_SESSION['show_orders_list']) && !$user->level[USER_BIT_CASHIER]) $_SESSION['show_orders_list']=false;
 	$show_orders=$_SESSION['show_orders_list'];
 	
 	unset($_SESSION['select_all']);
 	
 	$_SESSION['go_back_to_cat']=0;
 	
-	$user = new user($_SESSION['userid']);
 	
 	if(table_is_closed($_SESSION['sourceid']) && !$user->level[USER_BIT_CASHIER]) {
 		table_closed_interface();
@@ -854,6 +852,16 @@ function orders_list () {
 		$tmp = '<a href="orders.php?command=ask_move">'.ucfirst(phr('MOVE_TABLE')).'</a><br/>';
 		$tpl -> append ('commands',$tmp);
 	}
+	if ($user->level[USER_BIT_CASHIER]) {
+		$tmp = '<a href="orders.php?command=ask_join">'.ucfirst(phr('JOIN_TABLE')).'</a><br/>';
+		$tpl -> append ('commands',$tmp);
+	}
+	if ($user->level[USER_BIT_CASHIER]) {
+		if($_SESSION['priceEditAllowed'][$_SESSION['sourceid']]) $msg=ucfirst(phr('STOP_EDITING_PRICES'));
+		else $msg=ucfirst(phr('EDIT_PRICES'));
+		$tmp = '<a href="orders.php?command=togglePriceEdit">'.$msg.'</a><br/>';
+		$tpl -> append ('commands',$tmp);
+	}
 	if ($user->level[USER_BIT_CASHIER] && table_is_closed($_SESSION['sourceid'])) {
 		$tmp = '<a href="orders.php?command=reopen_confirm">'.ucfirst(phr('REOPEN_TABLE')).'</a><br/>';
 		$tpl -> append ('commands',$tmp);
@@ -867,10 +875,8 @@ function orders_list () {
 	$tmp = categories_list();
 	$tpl -> assign ('categories',$tmp);
 	
-	/*
 	$tmp = letters_list();
 	$tpl -> assign ('letters',$tmp);
-	*/
 	
 	if(CONF_FAST_ORDER){
 		$tmp = order_fast_dishid_form ();
@@ -1087,7 +1093,8 @@ function dishes_list_cat ($data){
 function input_dish_id ($data){
 	$output = '';
 	
-	$output .= ucphr('DISH').': <input onChange="document.order_form.submit()" type="text" name="dishid" value="" size="6" maxlength="6">';
+	$output .= '<input type="hidden" name="data[searchterm]" value="1">';
+	$output .= ucphr('DISH').': <input onChange="document.order_form.submit()" type="text" name="dishid" value="" size="6" maxlength="20">';
 	
 	return  $output;
 }
@@ -1307,10 +1314,8 @@ function order_printed_class($printed,$suspended){
 	return $class;
 }
 
-function order_print_time_class($orderid){
-	$orderid= (int)$orderid;
-	$ord = new order ($orderid);
-	$elapsed = orders_print_elapsed_time ($ord);
+function order_print_time_class($arr){
+	$elapsed = orders_print_elapsed_time ($arr);
 	if($elapsed<1) return '';
 
 	$level=100/CONF_COLOUR_PRINTED_MAX_TIME*$elapsed;

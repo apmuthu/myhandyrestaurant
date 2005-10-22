@@ -2,5 +2,5 @@
 {size_triple}{priority} {highlight}{gonow}{/highlight}{/size_triple}
 {orders}
 {barcode}{highlight}{size_double}{warning}{/size_double}{/highlight}{date}
-{destination}
+{destination}{size_double}{ticketID}{/size_double}
 {page_cut}

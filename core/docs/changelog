@@ -1,6 +1,39 @@
-0.8.4 to 0.8.5 (released 29 January 2005)
+0.8.5 to xxx (to be released)
+- Optimized orders list page for performance (waiters)
+- Bugfix: DB backup page works again
+- Bugfix: there was an error when updating the order of a dish with low ingredient quantity in stock (new quantity <0 would result in "Check quantity" error message)
+- Added MoTHER, the Modules Tool for Hassle-free Easy R
+- Admin: back to item after updating or creating, instead of back to list
+- Main index page translated
+- Autocalc: Added the CONF_AUTOCALC_CONSIDERS_FIXED_PRICE constant to better configure autocalc (now considers the ingredients with fixed price)
+- Bugfix: the ingredients would not be deleted if they were included in previously deleted dishes
+- Bugfix: Add people number link works again
+- Added Join tables function
+- Faster closing tables procedure (can revert to old via configuration file)
+- Intelligent Printer button (prints directly if nothing else possible)
+- Removed "Reset separated bill counter" link
+- Toplist default priority set to 1
+- Added JavaPOS Fiscal Printer support (and created FabioPOS JavaPOS TCP/IP server to control JavaPOS devices)
+- Removed people number question if table is takeaway
+- Fast order system now accepts numerical searches (so codes are usable)
+- Top list doesn't show deleted dishes
+- My tables list removed for cashiers
+- Cashiers can modify any price (by toggling option on table)
+- All available modifications directly shown to cashier (max mods per page config ignored)
+- Discount frame is only shown when total is not 0
+- Discount less than 0 is taken as positive
+- Discount higher than total is set to total
+- Added configuration flag
+- Categories added to names of dishes and ingredients in search list
+- Added Tickets ID (printed at end of each ticket)
+- Added Tickets log
+- Removed customers name check (now it's possible to insert customers by surname only)
+- Added customers name in waiters' zone customers list
+- Bugfix: tables ordering number was changed if tables were moved
+
+0.8.4 to 0.8.5 (released 31 January 2005)
 - Bugfix: deleted categories don't appear anymore in ingredients and dishes droplists
-- Replaced stock system with new version
+- Replaced stock system with new version (written from scratch)
 - Added Delete All button in administration
 - Added automatic unit converter (works with lb,oz,mg,cg,dg,g,dag,hg,kg,gal,floz,ml,cl,dl,l,hl)
 - Stock and dishes/ingredients integration
@@ -20,6 +53,7 @@
 - Added fast order form in orders page in waiters' section (type in dish id or part of name)
 - Hidden orders list by default in waiters' section to improve performance
 - Added close button on top list (waiters)
+- Added online help
 
 0.8.4-beta4 to 0.8.4 (released 9 December 2004)
 - Added jscalendar widget to select date in reports range

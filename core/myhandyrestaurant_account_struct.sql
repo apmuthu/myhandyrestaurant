@@ -1,8 +1,17 @@
--- MySQL dump 9.11
+-- MySQL dump 10.9
 --
 -- Host: localhost    Database: myhandyrestaurant-acc
 -- ------------------------------------------------------
--- Server version	4.0.23_Debian-3-log
+-- Server version	4.1.14-Debian_6-log
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
 -- Table structure for table `mhr_account_account_log`
@@ -14,11 +23,11 @@ CREATE TABLE `mhr_account_account_log` (
   `account_id` int(10) unsigned NOT NULL default '0',
   `type` int(11) NOT NULL default '0',
   `amount` decimal(10,2) NOT NULL default '0.00',
-  `timestamp` timestamp(14) NOT NULL,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   `description` text NOT NULL,
   `mgmt_id` bigint(20) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`)
-) TYPE=MyISAM;
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `mhr_account_accounts`
@@ -39,7 +48,7 @@ CREATE TABLE `mhr_account_accounts` (
   `amount` decimal(10,2) NOT NULL default '0.00',
   `currency` tinytext NOT NULL,
   PRIMARY KEY  (`id`)
-) TYPE=MyISAM;
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `mhr_account_log`
@@ -48,7 +57,7 @@ CREATE TABLE `mhr_account_accounts` (
 DROP TABLE IF EXISTS `mhr_account_log`;
 CREATE TABLE `mhr_account_log` (
   `id` bigint(20) unsigned NOT NULL auto_increment,
-  `datetime` timestamp(14) NOT NULL,
+  `datetime` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   `waiter` text NOT NULL,
   `destination` text NOT NULL,
   `dish` text NOT NULL,
@@ -57,94 +66,206 @@ CREATE TABLE `mhr_account_log` (
   `category` text NOT NULL,
   `quantity` tinyint(3) unsigned NOT NULL default '0',
   `price` decimal(10,2) NOT NULL default '0.00',
-  `payment` int(4) unsigned NOT NULL default '0',
+  `transaction` bigint(20) unsigned NOT NULL default '0',
+  `table` bigint(20) NOT NULL default '0',
   UNIQUE KEY `id` (`id`),
   KEY `datetime` (`datetime`),
   KEY `datetime_2` (`datetime`)
-) TYPE=MyISAM;
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
--- Table structure for table `mhr_account_mgmt_addressbook`
+-- Table structure for table `mhr_accounts`
 --
 
-DROP TABLE IF EXISTS `mhr_account_mgmt_addressbook`;
-CREATE TABLE `mhr_account_mgmt_addressbook` (
-  `id` int(11) NOT NULL auto_increment,
+DROP TABLE IF EXISTS `mhr_accounts`;
+CREATE TABLE `mhr_accounts` (
+  `id` bigint(20) NOT NULL auto_increment,
+  `class` text NOT NULL,
+  `hidden` tinyint(4) NOT NULL default '0',
+  `deleted` tinyint(4) NOT NULL default '0',
+  PRIMARY KEY  (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_bill_accounts`
+--
+
+DROP TABLE IF EXISTS `mhr_bill_accounts`;
+CREATE TABLE `mhr_bill_accounts` (
+  `id` int(10) unsigned NOT NULL auto_increment,
   `name` text NOT NULL,
-  `vat` text NOT NULL,
-  `address` text NOT NULL,
-  `telephone` text NOT NULL,
-  `fax` text NOT NULL,
-  `bank_account` text NOT NULL,
-  `abi` text NOT NULL,
-  `cab` text NOT NULL,
-  `meal_circuit` text NOT NULL,
-  `type` tinyint(4) NOT NULL default '0',
-  `note` text NOT NULL,
-  `email` text NOT NULL,
-  `web` text NOT NULL,
+  `amount` decimal(10,2) NOT NULL default '0.00',
   UNIQUE KEY `id` (`id`)
-) TYPE=MyISAM;
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
--- Table structure for table `mhr_account_mgmt_main`
+-- Table structure for table `mhr_bill_data`
 --
 
-DROP TABLE IF EXISTS `mhr_account_mgmt_main`;
-CREATE TABLE `mhr_account_mgmt_main` (
-  `id` int(11) unsigned NOT NULL auto_increment,
-  `date` timestamp(14) NOT NULL,
-  `cash_amount` decimal(10,2) NOT NULL default '0.00',
-  `cash_taxable_amount` decimal(10,2) NOT NULL default '0.00',
-  `cash_vat_amount` decimal(10,2) NOT NULL default '0.00',
-  `bank_amount` decimal(10,2) NOT NULL default '0.00',
-  `bank_taxable_amount` decimal(10,2) NOT NULL default '0.00',
-  `bank_vat_amount` decimal(10,2) NOT NULL default '0.00',
-  `debit_amount` decimal(10,2) NOT NULL default '0.00',
-  `debit_taxable_amount` decimal(10,2) NOT NULL default '0.00',
-  `debit_vat_amount` decimal(10,2) NOT NULL default '0.00',
-  `debit` tinyint(4) NOT NULL default '0',
-  `paid` tinyint(4) NOT NULL default '0',
-  `type` tinyint(4) NOT NULL default '0',
-  `description` text NOT NULL,
-  `number` text NOT NULL,
-  `who` text NOT NULL,
-  `stock_object` text NOT NULL,
-  `associated_invoice` int(11) NOT NULL default '0',
-  `internal_id` text NOT NULL,
-  `annulled` tinyint(4) NOT NULL default '0',
-  `waiter_income` tinyint(4) NOT NULL default '0',
-  `account_id` int(11) unsigned NOT NULL default '0',
-  `account_movement` bigint(20) unsigned NOT NULL default '0',
-  UNIQUE KEY `id` (`id`)
-) TYPE=MyISAM;
-
---
--- Table structure for table `mhr_account_receipts`
---
-
-DROP TABLE IF EXISTS `mhr_account_receipts`;
-CREATE TABLE `mhr_account_receipts` (
+DROP TABLE IF EXISTS `mhr_bill_data`;
+CREATE TABLE `mhr_bill_data` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `internal_id` text NOT NULL,
-  `timestamp` timestamp(14) NOT NULL,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   `amount` decimal(10,2) NOT NULL default '0.00',
-  `type` tinyint(4) NOT NULL default '0',
-  `annulled` tinyint(4) NOT NULL default '0',
+  `deleted` tinyint(4) NOT NULL default '0',
+  `discount` decimal(10,2) NOT NULL default '0.00',
+  `vat` decimal(10,2) NOT NULL default '0.00',
+  `text` text NOT NULL,
+  `customer` bigint(20) NOT NULL default '0',
+  `table` bigint(20) NOT NULL default '0',
+  `transaction` bigint(20) NOT NULL default '0',
+  `account` int(10) unsigned NOT NULL default '1',
   UNIQUE KEY `id` (`id`)
-) TYPE=MyISAM;
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
--- Table structure for table `mhr_account_stock_log`
+-- Table structure for table `mhr_cash_accounts`
 --
 
-DROP TABLE IF EXISTS `mhr_account_stock_log`;
-CREATE TABLE `mhr_account_stock_log` (
-  `id` bigint(20) unsigned NOT NULL auto_increment,
-  `timestamp` timestamp(14) NOT NULL,
+DROP TABLE IF EXISTS `mhr_cash_accounts`;
+CREATE TABLE `mhr_cash_accounts` (
+  `id` int(10) unsigned NOT NULL auto_increment,
   `name` text NOT NULL,
-  `quantity` int(11) NOT NULL default '0',
-  `invoice_id` bigint(20) unsigned NOT NULL default '0',
+  `amount` decimal(10,2) NOT NULL default '0.00',
   UNIQUE KEY `id` (`id`)
-) TYPE=MyISAM;
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_cash_data`
+--
+
+DROP TABLE IF EXISTS `mhr_cash_data`;
+CREATE TABLE `mhr_cash_data` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `name` text NOT NULL,
+  `amount` decimal(10,2) NOT NULL default '0.00',
+  `deleted` tinyint(4) NOT NULL default '0',
+  `transaction` bigint(20) NOT NULL default '0',
+  `account` int(10) unsigned NOT NULL default '1',
+  UNIQUE KEY `id` (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_invoice_accounts`
+--
+
+DROP TABLE IF EXISTS `mhr_invoice_accounts`;
+CREATE TABLE `mhr_invoice_accounts` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `name` text NOT NULL,
+  `amount` decimal(10,2) NOT NULL default '0.00',
+  UNIQUE KEY `id` (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_invoice_data`
+--
+
+DROP TABLE IF EXISTS `mhr_invoice_data`;
+CREATE TABLE `mhr_invoice_data` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `internal_id` text NOT NULL,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `amount` decimal(10,2) NOT NULL default '0.00',
+  `deleted` tinyint(4) NOT NULL default '0',
+  `discount` decimal(10,2) NOT NULL default '0.00',
+  `vat` decimal(10,2) NOT NULL default '0.00',
+  `text` text NOT NULL,
+  `customer` bigint(20) NOT NULL default '0',
+  `table` bigint(20) NOT NULL default '0',
+  `paid` tinyint(4) NOT NULL default '1',
+  `transaction` bigint(20) NOT NULL default '0',
+  `account` int(10) unsigned NOT NULL default '1',
+  UNIQUE KEY `id` (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_last_orders`
+--
+
+DROP TABLE IF EXISTS `mhr_last_orders`;
+CREATE TABLE `mhr_last_orders` (
+  `id` bigint(20) unsigned NOT NULL auto_increment,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `dishid` mediumint(9) NOT NULL default '0',
+  PRIMARY KEY  (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_receipt_accounts`
+--
+
+DROP TABLE IF EXISTS `mhr_receipt_accounts`;
+CREATE TABLE `mhr_receipt_accounts` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `name` text NOT NULL,
+  `amount` decimal(10,2) NOT NULL default '0.00',
+  UNIQUE KEY `id` (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_receipt_data`
+--
+
+DROP TABLE IF EXISTS `mhr_receipt_data`;
+CREATE TABLE `mhr_receipt_data` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `internal_id` text NOT NULL,
+  `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `amount` decimal(10,2) NOT NULL default '0.00',
+  `deleted` tinyint(4) NOT NULL default '0',
+  `discount` decimal(10,2) NOT NULL default '0.00',
+  `vat` decimal(10,2) NOT NULL default '0.00',
+  `text` text NOT NULL,
+  `customer` bigint(20) NOT NULL default '0',
+  `table` bigint(20) NOT NULL default '0',
+  `transaction` bigint(20) NOT NULL default '0',
+  `account` int(10) unsigned NOT NULL default '1',
+  UNIQUE KEY `id` (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_tickets_log`
+--
+
+DROP TABLE IF EXISTS `mhr_tickets_log`;
+CREATE TABLE `mhr_tickets_log` (
+  `id` bigint(20) unsigned NOT NULL auto_increment,
+  `text` text NOT NULL,
+  `date` datetime NOT NULL default '0000-00-00 00:00:00',
+  `destination` bigint(20) NOT NULL default '0',
+  PRIMARY KEY  (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mhr_transactions`
+--
+
+DROP TABLE IF EXISTS `mhr_transactions`;
+CREATE TABLE `mhr_transactions` (
+  `id` bigint(20) NOT NULL auto_increment,
+  `timestamp` timestamp NULL default CURRENT_TIMESTAMP,
+  `name` text NOT NULL,
+  `fromClass` text NOT NULL,
+  `fromID` bigint(20) NOT NULL default '0',
+  `fromRecipient` bigint(20) NOT NULL default '0',
+  `toRecipient` bigint(20) NOT NULL default '0',
+  `toClass` text NOT NULL,
+  `toID` bigint(20) NOT NULL default '0',
+  `amount` decimal(10,2) NOT NULL default '0.00',
+  `deleted` tinyint(4) NOT NULL default '0',
+  PRIMARY KEY  (`id`),
+  KEY `date` (`timestamp`),
+  KEY `class` (`fromClass`(10))
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 

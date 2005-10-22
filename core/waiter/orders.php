@@ -68,6 +68,10 @@ switch ($command){
 				$list = array();
 				$dishid=trim($_REQUEST['dishid']);
 				
+				if($start_data['searchterm']) {
+					$searchActive=true;
+				} else $searchActive=false;
+				
 				if(empty($start_data['quantity'])) $start_data['quantity']=get_conf(__FILE__,__LINE__,"default_quantity");
 				
 				if((!isset($start_data['priority']) || !$start_data['priority']) && $dishid != SERVICE_ID) {
@@ -82,7 +86,8 @@ switch ($command){
 				// autosearch
 				// the user provided a text instead of a number,
 				// we look for dish
-				if($dishid!='' && !is_numeric($dishid)) {
+				if($dishid!='' && $searchActive) {
+				// if($dishid!='' && !is_numeric($dishid)) {
 					$dish=new dish;
 					$num=$dish->search_name_rows($dishid);
 					// -1 means found many, go to dish list
@@ -105,23 +110,22 @@ switch ($command){
 					}
 				}
 				
-				$dish=new dish($dishid);
-				if(!$dish->exists()) {
+				$dish = new dish($dishid);
+				if(!$dish->exists() && $dishid!=SERVICE_ID) {
 					$tmp = '<b><font color="Red">'.ucfirst(phr('DISH_DOES_NOT_EXIST'))."</font></b><br>\n";
 					$tpl -> append ('messages',$tmp);
 
 					orders_list ();
 					break;
 				}
-
+				
 				if($dishid) $id = orders_create ($dishid,$start_data);
-
 				
 				if($id) $err=0;
 				else $err=ERR_UNKNOWN;
 				
 				status_report ('CREATION',$err);
-
+				
 				if(isset($_REQUEST['from_category']) && $_REQUEST['from_category']) {
 					if (isset($_REQUEST['back_to_cat']) && $_REQUEST['back_to_cat']) $back_to_cat = true;
 					else $back_to_cat = false;
@@ -249,8 +253,46 @@ switch ($command){
 					mods_list ($start_data,$letter);
 				}
 				break;
+	case 'togglePriceEdit':
+				$table = new table ($_SESSION['sourceid']);
+				$err = $table -> togglePriceEdit();
+				status_report ('TOGGLE_PRICE_EDIT',$err);
+
+				orders_list ();
+				break;
 	case 'list':
 				orders_list ();
+				break;
+	case 'ask_join':
+				$tpl -> set_waiter_template_file ('tables');
+				
+				$tmp = navbar_empty('javascript:history.go(-1);');
+				$tpl -> assign ('navbar',$tmp);
+				
+				$user = new user($_SESSION['userid']);
+				if($user->level[USER_BIT_CASHIER]) $cols=get_conf(__FILE__,__LINE__,'menu_tables_per_row_cashier');
+				else $cols=get_conf(__FILE__,__LINE__,'menu_tables_per_row_waiter');
+
+				$table = new table ($_SESSION['sourceid']);
+				$table -> join_list_tables ($cols);
+				break;
+	case 'join':
+				$sourceTable = $start_data['sourceID'];
+				$destTable = $start_data['destID'];
+	
+				if (!$destTable) {
+					orders_list ();
+					break;
+				}
+				
+				$table = new table ($_SESSION['sourceid']);
+				$err = $table -> join ($destTable);
+				
+				status_report ('JOIN',$err);
+				
+				if (!$err) $_SESSION['sourceid'] = $destTable;
+				orders_list ();
+				
 				break;
 	case 'ask_move':
 				$tpl -> set_waiter_template_file ('tables');
@@ -292,7 +334,7 @@ switch ($command){
 				$err = table_associate ();
 				status_report ('ASSOCIATION',$err);
 				
-				if(get_conf(__FILE__,__LINE__,"service_fee_use")) orders_service_fee_questions ();
+				if(get_conf(__FILE__,__LINE__,"service_fee_use") && !table_is_takeaway($_SESSION['sourceid'])) orders_service_fee_questions ();
 				else orders_list ();
 				
 				break;
@@ -396,6 +438,15 @@ switch ($command){
 						// this allows bill_select to forget precedent selection
 						$_REQUEST['keep_separated']=0;
 					}
+				}
+				
+				bill_select();
+				break;
+	case 'bill_set_type':
+				if(isset($_REQUEST['type'])) $type=$_REQUEST['type'];
+				if(isset($_REQUEST['account'])) $account=$_REQUEST['account'];
+				
+				if(!bill_type_set($type) && !bill_account_set($account)) {
 				}
 				
 				bill_select();

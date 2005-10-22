@@ -88,9 +88,10 @@ class menu {
 		
 		$index = $this -> menu_menu($index+1,'');
 		$index = $this -> system($index+1,'');
-		$index = $this -> accounting($index+1,'');
-		// $index = $this -> accounts($index+1,'');
-		$index = $this -> contacts($index+1,'');
+		//$index = $this -> special($index+1,'');
+		//$index = $this -> accounting($index+1,'');
+		//$index = $this -> contacts($index+1,'');
+		$index = $this -> modules($index+1,'');
 		$index = $this -> reports($index+1,'');
 		$index = $this -> stock($index+1,'');
 		$index = $this -> logging($index+1,'');
@@ -139,18 +140,6 @@ class menu {
 		<table>
 		<tr><td height="20">&nbsp;</td></tr>
 		</table>';
-		// line to avoid lines to be covered by the menu
-		/*
-		$this -> output .= '
-		<table>
-		<tr><td height="20" class="invisible">';
-		$this -> output .= implode(' - ',$tmp);
-		$this -> output .= '
-		</td></tr>
-		</table>';
-		*/
-		// oM.menuPlacement=new Array(avail,avail+"*2",avail+"*3",avail+"*4",avail+"*5",avail+"*6",avail+"*7",avail+"*8");
-		//oM.menuPlacement=0;
 		
 		$cache -> lang_set ($_SESSION['language'],'menumenumenu',$this -> output);
 		return $this -> output;
@@ -389,6 +378,21 @@ class menu {
 	
 	}
 	
+	function special($start_idx,$parent) {
+		$i=$start_idx;
+		
+		$this->letters[$i]=strlen(ucphr('JAVAPOS_CLOSE_FISCAL_DAY'));
+		
+		$this -> output .= "\t\toM.makeMenu('m".$i."','','".ucphr('JAVAPOS_CLOSE_FISCAL_DAY')."','');\n";
+		$i++;
+		$this -> output.= "\t\toM.makeMenu('m".$i."','m".($i-1)."','".ucphr('JAVAPOS_CLOSE_FISCAL_DAY')."','".ROOTDIR."/admin/javapos_closefiscalday.php');\n";
+		$this -> links[$i]['name']=ucphr('JAVAPOS_CLOSE_FISCAL_DAY');
+		$this -> links[$i]['link']=ROOTDIR.'/admin/javapos_closefiscalday.php';
+		
+		return $i;
+	
+	}
+	
 	function contacts($start_idx,$parent) {
 		$i=$start_idx;
 		
@@ -403,6 +407,44 @@ class menu {
 		$i = $this -> insert_supplier($i+1,'m'.($i-1));
 		return $i;
 	
+	}
+	
+	function modules($start_idx,$parent) {
+		global $modManager;
+		
+		//if(is_object($modManager)) $this -> output .= '<br>okpapapa'."\n\n\n\n"; else $this -> output .= '<br>kopapapa'."\n\n\n\n";
+		
+		$i=$start_idx;
+		
+		$this -> letters[$i]=strlen(ucphr('MODULES'));
+		
+		$this -> output .= "\t\toM.makeMenu('m".$i."','','".ucphr('MODULES')."','');\n";
+		$i++;
+		
+		$menuArr = $modManager -> getMenuMods();
+		//echo $modManager->listModules();
+		
+		foreach($menuArr as $row) {
+			$this -> output.= "\t\toM.makeMenu('m".$i."','m".$start_idx."','".$row['label']."','".ROOTDIR.$row['url']."');\n";
+			$this -> links[$i]['name']=$row['text'];
+			$this -> links[$i]['link']=ROOTDIR.$row['url'];
+			$i++;
+		}
+		
+		$this -> output.= "\t\toM.makeMenu('m".$i."','m".$start_idx."','".ucphr('JAVAPOS_CLOSE_FISCAL_DAY')."','".ROOTDIR."/admin/javapos_closefiscalday.php');\n";
+		$this -> links[$i]['name']=ucphr('JAVAPOS_CLOSE_FISCAL_DAY');
+		$this -> links[$i]['link']=ROOTDIR.'/admin/javapos_closefiscalday.php';
+		
+		$i++;
+		
+		/*
+		$this -> output.= "\t\toM.makeMenu('m".$i."','m".($i-1)."','".ucphr('CONTACTS_LIST')."','".ROOTDIR."/manage/supply.php?command=list');\n";
+		$this -> links[$i]['name']=ucphr('CONTACTS').': '.ucphr('CONTACTS_LIST');
+		$this -> links[$i]['link']=ROOTDIR.'/manage/supply.php?command=list';
+		
+		$i = $this -> insert_supplier($i+1,'m'.($i-1));
+		*/
+		return $i;
 	}
 	
 	function insert_supplier($start_idx,$parent) {

@@ -188,6 +188,18 @@ class conf {
 			echo '<option value="lp"'.$selected['lp'].'>Lp / Cupsys</option>'."\n";
 			echo '<option value="win"'.$selected['win'].'>Win</option>'."\n";
 			echo '</select>'."\n";
+		} elseif($arr['name']=='stockDB') {
+			$obj = new accounting_database;
+			echo $obj -> selectDBLine($arr['name'],$arr['value']);
+			unset($obj);
+		} elseif($arr['name']=='ticketsLogDB') {
+			$obj = new accounting_database;
+			echo $obj -> selectDBLine($arr['name'],$arr['value']);
+			unset($obj);
+		} elseif($arr['name']=='topListDB') {
+			$obj = new accounting_database;
+			echo $obj -> selectDBLine($arr['name'],$arr['value']);
+			unset($obj);
 		} elseif($arr['name']=='country') {
 			$country = new country;
 			

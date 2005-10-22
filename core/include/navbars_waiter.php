@@ -267,8 +267,14 @@ function command_bar_table_vertical(){
 			</td>
 		</tr>
 		<tr>
-			<td>
-				<a href="orders.php?command=printing_choose"><img src="'.IMAGE_PRINT.'" alt="'.ucfirst(phr('PRINT')).'" border=0 width="32" height="32"></a>
+			<td>';
+if(printingToDo())
+	$output .= '
+				<a href="orders.php?command=printing_choose"><img src="'.IMAGE_PRINT.'" alt="'.ucfirst(phr('PRINT')).'" border=0 width="32" height="32"></a>';
+else
+	$output .= '
+				&nbsp;';
+	$output .= '
 			</td>
 		</tr>
 		<tr>

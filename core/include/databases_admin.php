@@ -106,7 +106,33 @@ class accounting_database extends object {
 
 		return $input_data;
 	}
+	
+	function selectDBLine ($name,$selectedDB="")
+	{
+		$output = "";
+		$output .= '<select name="data['.$name.']">'."\n";
+		
+		if($selectedDB==$_SESSION['common_db'] || empty($selectedDB)) $selected=' selected';
+		else $selected='';
+		$output .= '
+		<option value="'.$_SESSION['common_db'].'"'.$selected.'>'.htmlentities($_SESSION['common_db']).'</option>';
+		
+		$query="SELECT * FROM `".$this->table."`";
+		$res=common_query($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+		
+		while ($arr_dbs = mysql_fetch_array($res)) {
+			if($selectedDB==$arr_dbs['db']) $selected=' selected';
+			else $selected='';
 
+			$output .= '
+		<option value="'.$arr_dbs['db'].'"'.$selected.'>'.htmlentities($arr_dbs['db']).'</option>';
+		}
+		$output .= '</select>'."\n";
+		
+		return $output;
+	}
+	
 	function fill_database() {
 		require(ROOTDIR."/conf/config.constants.inc.php");
 		$file=ROOTDIR.'/'.$location['account']['struct'];
@@ -200,7 +226,9 @@ class accounting_database extends object {
 	function delete_tables() {
 		if(empty($this->db_name)) return 1;
 
-		$query='DROP TABLE `'.$GLOBALS['table_prefix'].'account_account_log`,`'.$GLOBALS['table_prefix'].'account_accounts`,`'.$GLOBALS['table_prefix'].'account_log`,`'.$GLOBALS['table_prefix'].'account_mgmt_addressbook`,`'.$GLOBALS['table_prefix'].'account_mgmt_main`,`'.$GLOBALS['table_prefix'].'account_receipts`,`'.$GLOBALS['table_prefix'].'account_stock_log`';
+		$query='DROP TABLE
+		`'.$GLOBALS['table_prefix'].'account_log`,
+		`'.$GLOBALS['table_prefix'].'account_stock_log`';
 
 		mysql_db_query ($this->db_name,$query);
 		if($errno=mysql_errno()){

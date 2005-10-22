@@ -52,6 +52,21 @@ class user extends object {
 		$this -> get_level ();
 	}
 	
+	function post_insert ($input_data) {
+		global $modManager;
+		
+		$msg = new message;
+		$msg->setProperty('command','mhrUsers_addUser');
+		$msg->setProperty('id',$input_data['id']);
+		$msg->setProperty('name',$input_data['name']);
+		$msg->setProperty('language',$input_data['language']);
+		$msg->setProperty('template',$input_data['template']);
+		$msg->setType(MSG_TYPE_USER);
+		$modManager->distrMsg($msg);
+
+		return $input_data;
+	}
+	
 	function update_field ($field) {
 		if(!$this->id) return ERR_NO_ORDER_CHOSEN;
 		
@@ -89,7 +104,7 @@ class user extends object {
 				$table.`id`,
 				$table.`name`,
 				RPAD('".ucphr('USERS')."',30,' ') as `table`,
-				".TABLE_USERS." as `table_id`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
 				WHERE $table.`deleted`='0'
 				AND $table.`name` LIKE '%$search%'

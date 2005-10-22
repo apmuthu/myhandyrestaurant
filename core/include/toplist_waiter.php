@@ -27,27 +27,29 @@
 * @copyright		Copyright 2003-2005, Fabio De Pascale
 */
 
-
-
 function toplist_delete_firsts (){
+	// database not found - non fatal error
+	$db=get_conf(__FILE__,__LINE__,'topListDB');
+	if(!commonTableExists($db,'#prefix#last_orders')) return 0;
+
 	// cut out all the possible error inserted (dishid=0)
 	$query = "DELETE FROM `#prefix#last_orders` WHERE `dishid`='0'";
-	$res=common_query($query,__FILE__,__LINE__);
+	$res = database_query($query,__FILE__,__LINE__,$db);
 	if(!$res) return ERR_MYSQL;
 	
 	$query = "SELECT * FROM `#prefix#last_orders` ORDER BY `id`";
-	$res=common_query($query,__FILE__,__LINE__);
+	$res = database_query($query,__FILE__,__LINE__,$db);
 	if(!$res) return ERR_MYSQL;
 
 	$num=mysql_num_rows($res);
 	while($num>=CONF_TOPLIST_SAVED_NUMBER){
 		$arr=mysql_fetch_array($res);
 		$query = "DELETE FROM `#prefix#last_orders` WHERE `id`=".$arr['id']." LIMIT 1";
-		$res=common_query($query,__FILE__,__LINE__);
+		$res = database_query($query,__FILE__,__LINE__,$db);
 		if(!$res) return ERR_MYSQL;
 
 		$query = "SELECT * FROM `#prefix#last_orders` ORDER BY `id`";
-		$res=common_query($query,__FILE__,__LINE__);
+		$res = database_query($query,__FILE__,__LINE__,$db);
 		if(!$res) return ERR_MYSQL;
 		$num=mysql_num_rows($res);
 	}
@@ -55,12 +57,23 @@ function toplist_delete_firsts (){
 }
 
 function toplist_show(){
+	// database not found - non fatal error
+	$db=get_conf(__FILE__,__LINE__,'topListDB');
+	if(!commonTableExists($db,'#prefix#last_orders')) return 0;
+	
 	global $tpl;
 
 	$_SESSION['order_added']=0;
 
-	$query = "SELECT * FROM `#prefix#last_orders`";
-	$res=common_query($query,__FILE__,__LINE__);
+	if($db==$_SESSION['common_db'])
+	{
+		$query = "SELECT DISTINCT #prefix#last_orders.dishid, #prefix#dishes.deleted, #prefix#dishes.id  FROM `#prefix#last_orders`,`#prefix#dishes`
+			WHERE #prefix#dishes.deleted='0'
+			AND #prefix#last_orders.dishid=#prefix#dishes.id";
+	} else {
+		$query = "SELECT DISTINCT #prefix#last_orders.dishid FROM `#prefix#last_orders`";
+	}
+	$res = database_query($query,__FILE__,__LINE__,$db);
 	if(!$res) return ERR_MYSQL;
 
 	if(!mysql_num_rows($res)) return 1;
@@ -69,15 +82,15 @@ function toplist_show(){
 		$dishid=$arr['dishid'];
 		if($dishid==MOD_ID || $dishid==SERVICE_ID) continue;
 		
-		/*
-		$query = "SELECT * FROM `#prefix#dishes` WHERE `id`='$dishid'";
-		$res2=common_query($query,__FILE__,__LINE__);
-		if(!$res2) return ERR_MYSQL;
-		if(!mysql_num_rows($res2)) continue;
-		*/
+		$dishobj = new dish ($dishid);
+		if(!$dishobj -> exists()) continue;
 		
-		if(!isset($toplist[$dishid])) $toplist[$dishid]=0;
-		$toplist[$dishid]++;
+		$query = "SELECT COUNT(id) as number FROM `#prefix#last_orders` WHERE dishid='$dishid'";
+		$res2 = database_query($query,__FILE__,__LINE__,$db);
+		if(!$res2) return ERR_MYSQL;
+		
+		$arr2=mysql_fetch_array($res2);
+		$toplist[$dishid]=$arr2['number'];
 	}
 
 	if(!is_array($toplist)) return 0;
@@ -85,7 +98,7 @@ function toplist_show(){
 	arsort($toplist);
 	reset ($toplist);
 
-	$chk[1]="";
+	$chk[1]="checked";
 	$chk[2]="";
 	$chk[3]="";
 
@@ -175,10 +188,14 @@ function toplist_insert ($dishid,$quantity){
 	if(!$dishid) return 0;
 	if($dishid==MOD_ID || $dishid==SERVICE_ID) return 0;
 	
+	// database not found - non fatal error
+	$db=get_conf(__FILE__,__LINE__,'topListDB');
+	if(!commonTableExists($db,'#prefix#last_orders')) return 0;
+	
 	for($i=0; $i<$quantity;$i++) {
 		toplist_delete_firsts ();
 		$query = "INSERT INTO `#prefix#last_orders` (`dishid`) VALUES ('".$dishid."')";
-		$res=common_query($query,__FILE__,__LINE__);
+		$res = database_query($query,__FILE__,__LINE__,$db);
 		if(!$res) return ERR_MYSQL;
 	}
 	
@@ -188,14 +205,22 @@ function toplist_insert ($dishid,$quantity){
 function toplist_delete ($dishid,$quantity=1){
 	if(!$dishid) return 0;
 
+	// database not found - non fatal error
+	$db=get_conf(__FILE__,__LINE__,'topListDB');
+	if(!commonTableExists($db,'#prefix#last_orders')) return 0;
+	
 	$query = "DELETE FROM `#prefix#last_orders` WHERE `dishid`='".$dishid."' LIMIT $quantity";
-	$res=common_query($query,__FILE__,__LINE__);
+	$res = database_query($query,__FILE__,__LINE__,$db);
 	if(!$res) return ERR_MYSQL;
 
 	return 0;
 }
 
 function toplist_update($dishid,$old,$new) {
+	// database not found - non fatal error
+	$db=get_conf(__FILE__,__LINE__,'topListDB');
+	if(!commonTableExists($db,'#prefix#last_orders')) return 0;
+	
 	$err = 0;
 	$quantity_diff = $new - $old;
 	if($quantity_diff > 0) $err = toplist_insert ($dishid,abs($quantity_diff));

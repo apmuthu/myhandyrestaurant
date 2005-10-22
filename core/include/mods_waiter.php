@@ -149,7 +149,7 @@ function mods_create_ingreds ($ord, $ingredid, $operation) {
 			$ord_ingid = (int) $arr['id'];
 			$ord_ing = new order ($ord_ingid);
 			
-			if(class_exists('stock_object')) {
+			if(class_exists('stock_object') && stock_object::stockEnabled()) {
 				$stock = new stock_object;
 				$stock -> silent = true;
 				$stock -> remove_from_waiter($ord_ing->id,0);
@@ -179,7 +179,7 @@ function mods_create_ingreds ($ord, $ingredid, $operation) {
 		$ord_ing -> data['operation'] = $operation;
 		$ord_ing -> data['quantity'] = $ord -> data['quantity'];
 		
-		if(class_exists('stock_object')) {
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
 			$stock = new stock_object;
 			$stock -> silent = true;
 			$stock -> remove_from_waiter($ord_ing->id, $ord -> data['quantity']);
@@ -200,7 +200,7 @@ function mods_create_order ($start_data) {
 	// requantify the old order
 	$old->data['quantity'] = $old->data['quantity'] - $start_data['quantity'];
 	
-	if(class_exists('stock_object')) {
+	if(class_exists('stock_object') && stock_object::stockEnabled()) {
 		$stock = new stock_object;
 		$stock -> silent = true;
 		$stock -> remove_from_waiter($old->id,$old->data['quantity']);
@@ -232,7 +232,7 @@ function mods_create_order ($start_data) {
 	
 	$new -> data['quantity'] = $start_data['quantity'];
 	
-	if(class_exists('stock_object')) {
+	if(class_exists('stock_object') && stock_object::stockEnabled()) {
 		$stock = new stock_object;
 		$stock -> silent = true;
 		$stock -> remove_from_waiter($new->id,$new -> data['quantity']);
@@ -342,6 +342,7 @@ function mods_list_add ($ord,$letter='') {
 	$output = '';
 	
 	$max_ingreds=get_conf(__FILE__,__LINE__,"max_ingreds_per_page");
+	$user = new user($_SESSION['userid']);
 
 	if($letter=='ALL') {
 		$showall = true;
@@ -351,7 +352,11 @@ function mods_list_add ($ord,$letter='') {
 	if(!empty($letter)) $letter=ucfirst($letter[0]);
 
 	$ord -> ingredients_arrays();
-	if (!$showall && empty($letter) && count($ord->ingredients['available'])>$max_ingreds) return '';
+	if (!$user->level[USER_BIT_CASHIER]
+		&& !$showall
+		&& empty($letter)
+		&& count($ord->ingredients['available']
+		)>$max_ingreds) return '';
 
 	$linecounter=0;
 	$divider=10;

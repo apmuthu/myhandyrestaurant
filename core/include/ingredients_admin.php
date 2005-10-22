@@ -59,14 +59,16 @@ class ingredient extends object {
 		
 		$table = $this->table;
 		$lang_table = $table."_".$_SESSION['language'];
+		$cat_table = "#prefix#categories_".$_SESSION['language'];
 		
 		$query="SELECT
 				$table.`id`,
-				IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
+				CONCAT_WS(' - ',IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`),$cat_table.table_name) as `name`,
 				RPAD('".ucphr('INGREDIENTS')."',30,' ') as `table`,
-				".TABLE_INGREDIENTS." as `table_id`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
-				 JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
+				LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
+				LEFT JOIN $cat_table ON $cat_table.table_id=$table.category
 				WHERE $table.`deleted`='0'
 				AND ($lang_table.`table_name` LIKE '%$search%' OR $table.`name` LIKE '%$search%')
 				";
@@ -249,7 +251,7 @@ class ingredient extends object {
 	}
 	
 	function post_edit_page ($class) {
-		if(class_exists('stock_object')) {
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
 			$stock = new stock_object;
 			if ($stock_id=$stock->find_external($this->id, TYPE_INGREDIENT)) {
 				$mov = new stock_movement();
@@ -261,31 +263,45 @@ class ingredient extends object {
 	}
 	
 	function pre_delete($input_data) {
-		if(!$this->id) return 1;
-		if(!$this->exists()) return 2;
+		if(!$this->id) return ERR_NO_ID_PROVIDED_TO_FUNCTION;
+		if(!$this->exists()) return ERR_OBJECT_DOES_NOT_EXIST;
 
-		if($lang_del=$this->translations_delete($this->id)) return $lang_del;
+		if($lang_del=$this->translations_delete($this->id)) {
+			error_msg(__FILE__,__LINE__,'Error deleting translations');
+			return $lang_del;
+		}
 
 		$connected = $this -> find_connected_dishes (true);
 		
 		if(is_array($connected['included'])) {
 		foreach ($connected['included'] as $key => $value) {
 			$dish = new dish ($key);
-			if($err=$dish -> ingredient_remove($this->id)) return $err;
+			if($err=$dish -> ingredient_remove($this->id)) {
+				error_msg(__FILE__,__LINE__,'Error deleting ingredient '.$this->id.' from dish '.$key);
+				return $err;
+			}
 		}
 		}
 		if(is_array($connected['available'])) {
 		foreach ($connected['available'] as $key => $value) {
 			$dish = new dish ($key);
-			if($err=$dish -> ingredient_remove($this->id)) return $err;
+			if($err=$dish -> ingredient_remove($this->id)) {
+				error_msg(__FILE__,__LINE__,'Error deleting ingredient '.$this->id.' from dish '.$key);
+				return $err;
+			}
 		}
 		}
 		
-		$stock = new stock_object;
-		if ($stock_id=$stock->find_external($this->id, TYPE_INGREDIENT)) {
-			$stock = new stock_object($stock_id);
-			$stock->silent=true;
-			if($err=$stock->delete()) return $err;
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
+			$stock = new stock_object;
+			if ($stock_id=$stock->find_external($this->id, TYPE_INGREDIENT)) {
+				$stock = new stock_object($stock_id);
+				$stock->silent=true;
+				if($err=$stock->delete()) {
+					error_msg(__FILE__,__LINE__,'Error deleting stock object');
+					return $err;
+				}
+			}
 		}
 		
 		return $input_data;
@@ -320,6 +336,12 @@ class ingredient extends object {
 		} elseif ($input_data['name']=="") {
 			$input_data['name']=$input_data[$name_found];
 		}
+		
+		/*
+		if($this->nameExists($input_data['name'])) {
+			$msg=ucfirst(phr('CODE_EXISTS'));
+		}
+		*/
 		
 		$input_data['price'] = eq_to_number ($input_data['price']);
 		if($input_data['price']==="") {
@@ -583,7 +605,7 @@ class ingredient extends object {
 	</td>
 	<td>';
 	
-	if(class_exists('stock_object')) {
+	if(class_exists('stock_object') && stock_object::stockEnabled()) {
 		$stock = new stock_object;
 		$stock_id=$stock->find_external($this->id, TYPE_INGREDIENT);
 		

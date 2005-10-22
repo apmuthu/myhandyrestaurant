@@ -346,7 +346,7 @@ function r_getfile($file) {
   	$Log: xtpl.php,v $
   	Revision 1.1  2004/09/19 22:50:32  kilyerd
   	templating the admin...
-  	
+
   	Revision 1.4  2001/03/26 23:25:02  cranx
   	added keyword expansion to be more clear
   	

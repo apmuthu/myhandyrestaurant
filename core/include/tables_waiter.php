@@ -75,6 +75,8 @@ function table_clear(){
 	$sourceid = $_SESSION['sourceid'];
 	if(order_found_generic_not_priced($sourceid)) return ERR_GENERIC_ORDER_NOT_PRICED_FOUND;
 
+	$_SESSION['priceEditAllowed'][$sourceid]=0;
+	
 	$query = "DELETE FROM `#prefix#orders` WHERE `sourceid`='$sourceid'";
 	$res=common_query($query,__FILE__,__LINE__);
 	if(!$res) return ERR_MYSQL;
@@ -116,6 +118,23 @@ function table_closed_interface() {
 		return 0;
 	}
 	
+	$user = new user($_SESSION['userid']);
+	
+	if(CONF_ALLOW_EASY_RESET && $user->level[USER_BIT_CASHIER])
+	{
+		$err = table_pay(1);
+		status_report ('PAYMENT',$err);
+		
+		$err = table_clear();
+		status_report ('CLEARING',$err);
+		if (!$err) {
+			table_cleared_interface();
+			return 0;
+		}
+		
+		$paid=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'sources',"paid",$_SESSION['sourceid']);
+	}
+	
 	$tpl -> set_waiter_template_file ('closed_table');
 	
 	$paid=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'sources',"paid",$_SESSION['sourceid']);
@@ -126,11 +145,23 @@ function table_closed_interface() {
 		$err = table_pay(1);
 		status_report ('PAYMENT',$err);
 		
+		$err = table_clear();
+		status_report ('CLEARING',$err);
+		if (!$err) {
+			table_cleared_interface();
+			return 0;
+		}
+		
 		$paid=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'sources',"paid",$_SESSION['sourceid']);
 	}
 		
 	$tmp = navbar_tables_only();
-	$user = new user($_SESSION['userid']);
+	
+	if ($user->level[USER_BIT_CASHIER] && table_is_closed($_SESSION['sourceid'])) {
+		$tmp = '<a href="orders.php?command=reopen_confirm">'.ucfirst(phr('REOPEN_TABLE')).'</a><br/>';
+		$tpl -> append ('commands',$tmp);
+	}
+
 	if($user->level[USER_BIT_CASHIER]) $tmp = navbar_empty();
 	$tpl -> assign ('navbar',$tmp);
 	
@@ -266,6 +297,19 @@ function table_ask_close() {
 		table_closed_interface();
 		return 0;
 	}
+	
+	if(CONF_ALLOW_EASY_CLOSE)
+	{
+		$err = table_close($_SESSION['sourceid']);
+		status_report ('CLOSE',$err);
+		if (!$err) {
+			table_closed_interface();
+		} else {
+			orders_list ();
+		}
+		return 0;
+	}
+	
 	$tpl -> set_waiter_template_file ('question');
 
 	$tmp = '
@@ -580,9 +624,11 @@ function table_suggest_command($sourceid) {
 	$user = new user($_SESSION['userid']);
 	
 	if ($tableclosed && $user->level[USER_BIT_CASHIER] && !$paid){
-		$command="list";
+		//$command="list";
+		$command="closed";
 	} elseif ($tableclosed && $user->level[USER_BIT_CASHIER] && $paid){
-		$command="list";
+		//$command="list";
+		$command="closed";
 	} elseif ($tableclosed && !$user->level[USER_BIT_CASHIER] && !$paid) {
 		$command="closed";
 	} elseif ($tableclosed && !$user->level[USER_BIT_CASHIER] && $paid) {
@@ -768,7 +814,7 @@ function tables_list_all($cols=1,$show=0,$quiet=true){
 	$output = '';
 	
 	if(!$quiet) {
-		$query = "SELECT * FROM `#prefix#sources`";
+		$query = "SELECT * FROM `#prefix#sources` WHERE `deleted`='0'";
 		$res=common_query($query,__FILE__,__LINE__);
 		if(!$res) return '';
 		if(!mysql_num_rows ($res)) return ucphr('NO_TABLE_FOUND')."<br/>\n";
@@ -776,20 +822,23 @@ function tables_list_all($cols=1,$show=0,$quiet=true){
 	
 	switch($show) {
 		case 0:
-			$query = "SELECT `#prefix#sources`.`id`, `name`, `userid`, `toclose`, `#prefix#sources`.`paid`, `#prefix#orders`.`id` AS `order` FROM `#prefix#sources` LEFT JOIN `#prefix#orders` ON `sourceid`=`#prefix#sources`.`id` WHERE `takeaway` = '0'";
+			$query = "SELECT `#prefix#sources`.`id`, `#prefix#sources`.`deleted`, `name`, `userid`, `toclose`, `#prefix#sources`.`paid`, `#prefix#orders`.`id` AS `order` FROM `#prefix#sources` LEFT JOIN `#prefix#orders` ON `sourceid`=`#prefix#sources`.`id` WHERE `takeaway` = '0'";
 			$query .= " AND `visible` = '1'";
+			$query .= " AND `#prefix#sources`.`deleted` = '0'";
 			$query .= " GROUP BY `#prefix#sources`.`id` ASC";
 			$query .= " ORDER BY `#prefix#sources`.`ordernum` ASC";
 			break;
 		case 1:
-			$query = "SELECT `#prefix#sources`.`id`, `name`, `userid`, `toclose`, `#prefix#sources`.`paid`, `#prefix#orders`.`id` AS `order` FROM `#prefix#sources` LEFT JOIN `#prefix#orders` ON `sourceid`=`#prefix#sources`.`id` WHERE `takeaway` = '1'";
+			$query = "SELECT `#prefix#sources`.`id`, `#prefix#sources`.`deleted`, `name`, `userid`, `toclose`, `#prefix#sources`.`paid`, `#prefix#orders`.`id` AS `order` FROM `#prefix#sources` LEFT JOIN `#prefix#orders` ON `sourceid`=`#prefix#sources`.`id` WHERE `takeaway` = '1'";
 			$query .= " AND `visible` = '1'";
+			$query .= " AND `#prefix#sources`.`deleted` = '0'";
 			$query .= " GROUP BY `#prefix#sources`.`id` ASC";
 			$query .= " ORDER BY `#prefix#sources`.`ordernum` ASC";
 			break;
 		case 2:
-			$query="SELECT `#prefix#sources`.`id`, `name`, `userid`, `toclose`, `#prefix#sources`.`paid`, `#prefix#orders`.`id` AS `order` FROM `#prefix#sources` LEFT JOIN `#prefix#orders` ON `sourceid`=`#prefix#sources`.`id` WHERE `userid`='".$_SESSION['userid']."'";
+			$query="SELECT `#prefix#sources`.`id`, `#prefix#sources`.`deleted`, `name`, `userid`, `toclose`, `#prefix#sources`.`paid`, `#prefix#orders`.`id` AS `order` FROM `#prefix#sources` LEFT JOIN `#prefix#orders` ON `sourceid`=`#prefix#sources`.`id` WHERE `userid`='".$_SESSION['userid']."'";
 			$query .= " AND `visible` = '1'";
+			$query .= " AND `#prefix#sources`.`deleted` = '0'";
 			$query .= " GROUP BY `#prefix#sources`.`id` ASC";
 			$query .= " ORDER BY `#prefix#sources`.`ordernum` ASC";
 			break;

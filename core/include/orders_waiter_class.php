@@ -90,6 +90,12 @@ class order {
 		return 0;
 	}
 	
+	function getOverridePrice ()
+	{
+		return $this->data['override_price'];
+	
+	}
+	
 	function copy ($dest=0) {
 		if (!$dest || !$dest -> exists ()) {
 			$dest = new order();
@@ -123,7 +129,7 @@ class order {
 		return 0;
 	}
 	
-	function create() {
+	function create () {
 		if(!is_array($this->data)) return -1;
 
 		// Now we'll build the correct INSERT query, based on the fields provided
@@ -348,33 +354,34 @@ class order {
 	}
 
 	function price_mods_autocalc () {
-		$query ="SELECT #prefix#orders.* FROM `#prefix#orders` JOIN `#prefix#ingreds`
+		$query = "SELECT #prefix#orders.* FROM `#prefix#orders` JOIN `#prefix#ingreds`
 		WHERE #prefix#orders.ingredid = #prefix#ingreds.id
-		AND #prefix#ingreds.price = '0'
 		AND #prefix#ingreds.deleted = '0'
 		AND #prefix#ingreds.override_autocalc = '0'
 		AND #prefix#orders.associated_id = '".$this->id."'
 		AND #prefix#orders.id != '".$this->id."'
 		AND #prefix#orders.operation='1'
 		AND #prefix#orders.deleted='0'";
+		if(!CONF_AUTOCALC_CONSIDERS_FIXED_PRICE) $query .= " AND #prefix#ingreds.price = '0'";
 		
 		$res=common_query($query,__FILE__,__LINE__);
-		if(!$res) return mysql_errno();
+		if (!$res) return mysql_errno();
 		$added_num = mysql_num_rows($res);
 		
 		while ($arr = mysql_fetch_array($res)) {
 			$added[] = $arr['id'];
 		}
 
-		$query ="SELECT #prefix#orders.* FROM `#prefix#orders` JOIN `#prefix#ingreds`
+		$query = "SELECT #prefix#orders.* FROM `#prefix#orders` JOIN `#prefix#ingreds`
 		WHERE #prefix#orders.ingredid = #prefix#ingreds.id
-		AND #prefix#ingreds.price = '0'
 		AND #prefix#ingreds.deleted = '0'
 		AND #prefix#ingreds.override_autocalc = '0'
 		AND #prefix#orders.associated_id = '".$this->id."'
 		AND #prefix#orders.id != '".$this->id."'
 		AND #prefix#orders.operation='-1'
 		AND #prefix#orders.deleted='0'";
+		if(!CONF_AUTOCALC_CONSIDERS_FIXED_PRICE) $query .= " AND #prefix#ingreds.price = '0'";
+		
 		$res=common_query($query,__FILE__,__LINE__);
 		if(!$res) return mysql_errno();
 		$removed_num = mysql_num_rows($res);
@@ -383,10 +390,26 @@ class order {
 			$removed[] = $arr['id'];
 		}
 
-		$calc_removed = get_conf(__FILE__,__LINE__,"autocalc_considers_removed");
+		$fixed = 0;
+		if(CONF_AUTOCALC_CONSIDERS_FIXED_PRICE) {
+			$query = "SELECT #prefix#orders.* FROM `#prefix#orders` JOIN `#prefix#ingreds`
+			WHERE #prefix#orders.ingredid = #prefix#ingreds.id
+			AND #prefix#ingreds.deleted = '0'
+			AND #prefix#ingreds.override_autocalc = '0'
+			AND #prefix#orders.associated_id = '".$this->id."'
+			AND #prefix#orders.id != '".$this->id."'
+			AND #prefix#orders.operation != '0'
+			AND #prefix#orders.deleted='0'
+			AND #prefix#ingreds.price != '0'";
+			$res=common_query($query,__FILE__,__LINE__);
+			if (!$res) return mysql_errno();
+			$fixed = mysql_num_rows($res);
+		}
 		
-		if($calc_removed) $mod_qty = $added_num - $removed_num;
-		else $mod_qty = $added_num;
+		$calc_removed = get_conf(__FILE__,__LINE__,"autocalc_considers_removed");
+
+		if($calc_removed) $mod_qty = $added_num - $removed_num - $fixed;
+		else $mod_qty = $added_num - $fixed;
 		
 		$dish = new dish($this->data['dishid']);
 		$skip_autocalc = $dish -> data['autocalc_skip'];
@@ -456,6 +479,9 @@ class order {
 		if ($dishid != SERVICE_ID && $dish -> getGeneric())
 			return 0.0; 
 
+		if ($this -> getOverridePrice())
+			return 0; 
+
 		$price = $price_unitary * $arr['quantity'];
 		
 		$query ="UPDATE `#prefix#orders` SET `price`='".$price."' WHERE `id` = '".$ord_local_id."' AND `deleted`='0'";
@@ -490,20 +516,20 @@ class order {
 		return $err;
 	}
 	
-	function table_row($arr){
+	function table_row($arr,$toclose,$cashier){
 		$output = '';
-		$tbl = new table ($arr['sourceid']);
-		$toclose = $tbl -> get ('toclose');
 
+		/*
 		$dish = new dish ($arr['dishid']);
 		$dishname = $dish -> name ($_SESSION['language']);
-		if(!$arr['deleted'] && $arr['printed']!=NULL && CONF_TIME_SINCE_PRINTED) {
-			$ordid = (int) $arr['id'];
-			$ord = new order ($ordid);
-			$dishname .= ' ('.orders_print_elapsed_time ($ord,true).')';
-			unset ($ord);
-		}
 		$generic=$dish -> get ('generic');
+		*/
+		$dishname=$arr['dishname'];
+		$generic=$arr['generic'];
+		
+		if(!$arr['deleted'] && $arr['printed']!=NULL && CONF_TIME_SINCE_PRINTED) {
+			$dishname .= ' ('.orders_print_elapsed_time ($arr,true).')';
+		}
 		
 		$deleted=$arr['deleted'];
 		$orderid=$arr['id'];
@@ -518,9 +544,9 @@ class order {
 
 			// say if it's added or subtracted
 			if ($arr['operation']==1) {
-				$dishname="&nbsp;&nbsp;&nbsp;&nbsp; ".ucfirst(phr('PLUS'));
+				$dishname="&nbsp;&nbsp;&nbsp;&nbsp; ".ucphr('PLUS');
 			} elseif ($arr['operation']==-1) {
-				$dishname="&nbsp;&nbsp;&nbsp;&nbsp; ".ucfirst(phr('MINUS'));
+				$dishname="&nbsp;&nbsp;&nbsp;&nbsp; ".ucphr('MINUS');
 			} elseif ($arr['operation']==0) {
 				$dishname="&nbsp;&nbsp;&nbsp;&nbsp; ";
 			}
@@ -529,23 +555,21 @@ class order {
 
 			// and finally consider any optional info (lot/few)
 			if($arr['ingred_qty']==1) {
-				$dishname.=" ".ucfirst(phr('LOT'));
+				$dishname.=" ".ucphr('LOT');
 			} elseif($arr['ingred_qty']==-1) {
-				$dishname.=" ".ucfirst(phr('FEW'));
+				$dishname.=" ".ucphr('FEW');
 			}
 
 			// gets the original ingred price (from ingreds table)
 			// if the original price is 0 and the actual price is 0
 			// then it means that the ingred has passed through the autocalc system
 			// and we let the waiter know this, so he could check the prices.
-			$modingredprice = $ingr -> get ('price');
+			$modingredprice = $ingr -> data['price'];
 			//$modingredprice=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],"ingreds","price",$modingred);
 			if($modingredprice==0 && $arr['price']!=0) {
 				$dishname.=" (auto)";
 			}
-		}
-
-		if ($arr['dishid']==SERVICE_ID){
+		} elseif ($arr['dishid']==SERVICE_ID){
 			$dishname=ucfirst(phr('SERVICE_FEE'));
 		}
 
@@ -553,7 +577,7 @@ class order {
 		$oextra=order_extra_msg($arr['extra_care']);
 		$class=order_printed_class($arr['printed'],$arr['suspend']);
 		if(CONF_COLOUR_PRINTED && $arr['printed'] && !$arr['deleted']) {
-			$classtime = order_print_time_class ($arr['id']);
+			$classtime = order_print_time_class ($arr);
 			if(!$classtime) $classtime=$class;
 		} else $classtime = $class;
 		$classextra=order_extra_class($arr['extra_care'],$class);
@@ -659,10 +683,15 @@ class order {
 			'.$arr['priority'].'
 		</td>';
 		
+
 		// price cell
-		$user = new user($_SESSION['userid']);
-		
-		if($generic && $user->level[USER_BIT_CASHIER] && $arr['printed'] && !$deleted) {
+		if($generic && $cashier && $arr['printed'] && !$deleted) {
+			$link = 'orders.php?command=price_modify&amp;data[id]='.$arr['id'];
+			$output .= '
+		<td bgcolor="'.$class.'" onclick="redir(\''.$link.'\');">
+			<a href="'.$link.'">'.$arr['price'].'</a>
+		</td>';
+		} elseif($_SESSION['priceEditAllowed'][$_SESSION['sourceid']] && $cashier && $arr['dishid']!=MOD_ID && $arr['printed'] && !$deleted) {
 			$link = 'orders.php?command=price_modify&amp;data[id]='.$arr['id'];
 			$output .= '
 		<td bgcolor="'.$class.'" onclick="redir(\''.$link.'\');">
@@ -737,20 +766,20 @@ class order {
 				$link = 'orders.php?command=update&amp;data[quantity]='.$newquantity.'&amp;data[id]='.$orderid;
 				if($arr['suspend']) $link .= '&amp;data[suspend]=1';
 				if($arr['extra_care']) $link .= '&amp;data[extra_care]=1';
-				$output .= '<a href="'.$link.'"><img src="'.IMAGE_PLUS.'" alt="'.ucfirst(phr('PLUS')).' ('.ucfirst(phr('ADD')).')" border=0></a></td>
+				$output .= '<a href="'.$link.'"><img src="'.IMAGE_PLUS.'" alt="'.ucphr('PLUS').' ('.ucphr('ADD').')" border=0></a></td>
 		<td>';
 				if($arr['quantity']>1){
 					$newquantity=$arr['quantity']-1;
 					$link = 'orders.php?command=update&amp;data[quantity]='.$newquantity.'&amp;data[id]='.$orderid;
 					if($arr['suspend']) $link .= '&amp;data[suspend]=1';
 					if($arr['extra_care']) $link .= '&amp;data[extra_care]=1';
-					$output .= '<a href="'.$link.'"><img src="'.IMAGE_MINUS.'" alt="'.ucfirst(phr('MINUS')).' ('.ucfirst(phr('REMOVE')).')" border=0></a>';
+					$output .= '<a href="'.$link.'"><img src="'.IMAGE_MINUS.'" alt="'.ucphr('MINUS').' ('.ucphr('REMOVE').')" border=0></a>';
 				} elseif($arr['quantity']==1 && CONF_ALLOW_EASY_DELETE){
 					$newquantity=0;
 					$link = 'orders.php?command=ask_delete&amp;data[id]='.$orderid;
 					if($arr['suspend']) $link .= '&amp;data[suspend]=1';
 					if($arr['extra_care']) $link .= '&amp;data[extra_care]=1';
-					$output .= '<a href="'.$link.'"><img src="'.IMAGE_LITTLE_TRASH.'" alt="'.ucfirst(phr('MINUS')).' ('.ucfirst(phr('REMOVE')).')" border=0></a>';
+					$output .= '<a href="'.$link.'"><img src="'.IMAGE_LITTLE_TRASH.'" alt="'.ucphr('MINUS').' ('.ucphr('REMOVE').')" border=0></a>';
 				} else {
 					$output .= '&nbsp;'."\n";
 				}
@@ -766,53 +795,6 @@ class order {
 	</tr>'."\n\n";
 
 		return $output;
-	}
-
-	//http://www.projectseven.com/whims/cssbuttons/
-	function table_row_name ($arr){
-		$dish = new dish ($arr['dishid']);
-		$dishname = $dish -> name ($_SESSION['language']);
-		
-		$deleted=$arr['deleted'];
-		$orderid=$arr['id'];
-
-		if ($arr['dishid']==MOD_ID){
-			$modingred=$arr['ingredid'];
-			$ingr = new ingredient ($modingred);
-			$moddeddishname = $ingr -> name ($_SESSION['language']);
-	
-			// say if it's added or subtracted
-			if ($arr['operation']==1) {
-				$dishname="    ".ucfirst(phr('PLUS'));
-			} elseif ($arr['operation']==-1) {
-				$dishname="    ".ucfirst(phr('MINUS'));
-			}
-	
-			$dishname.=" ".$moddeddishname;
-	
-			// and finally consider any optional info (lot/few)
-			if($arr['ingred_qty']==1) {
-				$dishname.=" ".ucfirst(phr('LOT'));
-			} elseif($arr['ingred_qty']==-1) {
-				$dishname.=" ".ucfirst(phr('FEW'));
-			}
-	
-			// gets the original ingred price (from ingreds table)
-			// if the original price is 0 and the actual price is 0
-			// then it means that the ingred has passed through the autocalc system
-			// and we let the waiter know this, so he could check the prices.
-			$modingredprice = $ingr -> get ('price');
-			//$modingredprice=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],"ingreds","price",$modingred);
-			if($modingredprice==0 && $arr['price']!=0) {
-				$dishname.=" (auto)";
-			}
-		}
-
-		if ($arr['dishid']==SERVICE_ID){
-			$dishname=ucfirst(phr('SERVICE_FEE'));
-		}
-
-		return $dishname;
 	}
 
 	function line() {

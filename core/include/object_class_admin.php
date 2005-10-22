@@ -35,6 +35,7 @@ class object {
 	var $show_empty_name=false;
 	var $show_category_list = false;
 	var $multilang;
+	var $nameField;
 	var $data;
 	var $limit_start;
 	var $orderby;
@@ -53,6 +54,7 @@ class object {
 	var $form_properties;
 	
 	var $title;
+	var $label;
 	var $number_found;
 	var $global_search;
 	var $newvalue;
@@ -68,7 +70,7 @@ class object {
 		
 		$query="SELECT * FROM `".$this->table."` WHERE id='".$this->id."'";
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return ERR_MYSQL;
 		
 		$arr = mysql_fetch_assoc ($res);
@@ -82,23 +84,23 @@ class object {
 	function count_records () {
 		$query="SELECT * FROM `".$this->table."`";
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return 0;
 		
 		return mysql_num_rows($res);
 	}
 	
-	function exists($override_cache=false) {
+	function exists($override_cache=false, $deleted_exists=false) {
+		$cache = new cache ();
 		if(!$override_cache) {
-			$cache = new cache ();
 			if($this->db=='common' && $cache_out=$cache -> get ($this->table,$this->id,'id')) return $cache_out;
 		}
 		
 		$query="SELECT `id` FROM `".$this->table."` WHERE id='".$this->id."'";
-		if($this->flag_delete) $query .= " AND `deleted`='0'";
+		if($this->flag_delete && !$deleted_exists) $query .= " AND `deleted`='0'";
 		
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return 0;
 		
 		$ret = mysql_num_rows($res);
@@ -108,12 +110,29 @@ class object {
 		return $ret;
 	}
 
+	function nameExists($name, $deleted_exists=false) {
+		if(isset($this->nameField) && !empty($this->nameField)) $field=$this->nameField;
+		else $field='name';
+		
+		$query="SELECT `id` FROM `".$this->table."` WHERE `$field`='".$name."'";
+		if($this->flag_delete && !$deleted_exists) $query .= " AND `deleted`='0'";
+		
+		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
+		if(!$res) return 0;
+		
+		$ret = mysql_num_rows($res);
+		
+		return $ret;
+	}
+
 	function name($lang='',$newname='') {
 		if($this->id==SERVICE_ID) return phr('SERVICE_FEE');
 	
 		if(isset($this->no_name) && $this->no_name) return '';
 		
-		// if(!$this->exists()) return 0;
+		if(isset($this->nameField) && !empty($this->nameField)) $field=$this->nameField;
+		else $field='name';
 		
 		if(isset($this->referring_name) && $this->referring_name) {
 			$this->fetch_data();
@@ -142,7 +161,7 @@ class object {
 			
 			$query="SELECT `table_name` FROM `".$lang_table."` WHERE `table_id`='".$this->id."'";
 			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-			else $res = accounting_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
 			if(!$res) return '';
 			
 			$arr = mysql_fetch_array ($res);
@@ -161,26 +180,26 @@ class object {
 		}
 
 		$cache = new cache ();
-		if($this->db=='common' && $cache_out=$cache -> get ($this->table,$this->id,'name')) return $cache_out;
+		if($this->db=='common' && $cache_out=$cache -> get ($this->table,$this->id,$field)) return $cache_out;
 		
 		 /* RTG: if this object has a name column on table, we already have if in data array
 		I have seen this is not always true: for example, when construct a generic vat rate
 		(without data), so I put this like a conditional */
 		
-		if ($data && $this->data['name']) {
-			$ret=$this->data['name'];
+		if ($data && $this->data[$field]) {
+			$ret=$this->data[$field];
 		} else {
-			$query="SELECT `name` FROM `".$this->table."` WHERE `id`='".$this->id."'";
+			$query="SELECT `$field` FROM `".$this->table."` WHERE `id`='".$this->id."'";
 			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-			else $res = accounting_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
 			if(!$res) return '';
 			
 			$arr = mysql_fetch_array ($res);
-			$ret=$arr['name'];
+			$ret=$arr[$field];
 		}
 		$ret=stripslashes($ret);
 
-		$cache -> set ($this->table,$this->id,'name',$ret);
+		$cache -> set ($this->table,$this->id,$field,$ret);
 		return $ret;
 	}
 
@@ -189,19 +208,22 @@ class object {
 
 		if(!$newname) $this->name($lang);
 
+		if(isset($this->nameField) && !empty($this->nameField)) $field=$this->nameField;
+		else $field='name';
+		
 		if($lang) {
 			$lang_table=$this->table."_".$lang;
 			$table=$lang_table;
 			$query="UPDATE `".$lang_table."` SET `table_name`='".$newname."' WHERE `table_id`='".$this->id."'";
 		} else {
 			$table=$this->table;
-			$query="UPDATE `".$this->table."` SET `name`='".$newname."' WHERE id='".$this->id."'";
+			$query="UPDATE `".$this->table."` SET `$field`='".$newname."' WHERE id='".$this->id."'";
 		}
 
 		$cache = new cache (); $cache -> flush ($table,$this->id);
 
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return mysql_errno();
 		
 		return 0;
@@ -217,7 +239,7 @@ class object {
 		
 		$query="SELECT $what FROM `".$this->table."` WHERE id='".$this->id."'";
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return '';
 		
 		$arr = mysql_fetch_array ($res);
@@ -229,30 +251,38 @@ class object {
 		return $ret;
 	}
 
-	function set($what,$new){
-		if(!$this->exists()) return 1;
+	function set($what,$new) {
+		if(!$this->exists(false,true)) return ERR_OBJECT_DOES_NOT_EXIST;
 
 		$cache = new cache ();
 		$cache -> flush ($this->table,$this->id);
 		
 		$query="UPDATE `".$this->table."` SET $what='".$new."' WHERE id='".$this->id."'";
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
-		if(!$res) return mysql_errno();
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
+		if(!$res) return ERR_MYSQL;
 		
 		return 0;
 	}
 
 	function delete($input_data=array()) {
 		global $tpl;
-		$cache = new cache (); $cache -> flush ($this->table,$this->id);
+		
+		// save data so that post_delete can restore it from $this->data
+		$this->fetch_data();
+		
+		$cache = new cache ();
+		$cache -> flush ($this->table,$this->id);
 		
 		if(method_exists($this,'pre_delete')) {
 			$input_data=$this->pre_delete($input_data);
 		}
-		if(!is_array($input_data)) return $input_data;
+		if(!is_array($input_data)) {
+			error_msg(__FILE__,__LINE__,'Input is not an array (Error in pre_delete)');
+			return $input_data;
+		}
 
-		$name=$this->name();
+		if(!$this->silent) $name=$this->name();
 
 		// Now we'll build the correct UPDATE query, based on the fields provided
 		if(isset($this->flag_delete) && $this->flag_delete)
@@ -262,10 +292,11 @@ class object {
 		
 		$query.=" WHERE `id`='".$this->id."'";
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
-		if(!$res) return mysql_errno();
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
+		if(!$res) return ERR_MYSQL;
 		
 		if(method_exists($this,'post_delete')) {
+			$input_data=$this->data;
 			$input_data=$this->post_delete($input_data);
 			if(!is_array($input_data)) return $input_data;
 		}
@@ -311,7 +342,7 @@ class object {
 		$query.=")";
 
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) {
 			$errno=mysql_errno();
 			if($errno==1062){
@@ -329,14 +360,14 @@ class object {
 		$inserted_id = mysql_insert_id();
 
 		if(!$this->silent) {
-			$tmp = GLOBALMSG_RECORD_THE.' <b>'.$input_data['name'].'</b> '.GLOBALMSG_RECORD_ADD_OK.'<br/>';
+			$tmp = GLOBALMSG_RECORD_THE.' <b>'.$this->name($_SESSION['language']).'</b> '.GLOBALMSG_RECORD_ADD_OK.'<br/>';
 			$tpl -> append("messages", $tmp);
 		}
 		
 		$this->id=$inserted_id;
 	
 		if(method_exists($this,'post_insert')) {
-			$input_data=$this->post_insert($input_data);
+			$input_data = $this->post_insert($input_data);
 			if(!is_array($input_data)) return $input_data;
 		}
 		
@@ -371,11 +402,11 @@ class object {
 		$query.=" WHERE `id`='".$input_data['id']."'";
 
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return mysql_errno();
 
 		if(!$this->silent) {
-			$tmp = "\n".GLOBALMSG_RECORD_THE.' <b>'.$input_data['name'].'</b> '.GLOBALMSG_RECORD_EDIT_OK.'<br/>';
+			$tmp = "\n".GLOBALMSG_RECORD_THE.' <b>'.$this->name($_SESSION['language']).'</b> '.GLOBALMSG_RECORD_EDIT_OK.'<br/>';
 			$tpl -> append("messages", $tmp);
 		}
 
@@ -414,7 +445,7 @@ class object {
 				
 				$query="SELECT * FROM `$table` WHERE `table_id`='".$input_data['id']."'";
 				if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-				else $res = accounting_query($query,__FILE__,__LINE__);
+				else $res = database_query($query,__FILE__,__LINE__,$this->db);
 				if(!$res) return ERR_MYSQL;
 				
 				$charset = lang_get($lang_now,'CHARSET');
@@ -426,7 +457,7 @@ class object {
 					$query="INSERT INTO `$table` ( `table_id` , `table_name` ) VALUES ( '".$input_data['id']."' , '$value' )";
 				}
 				if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-				else $res = accounting_query($query,__FILE__,__LINE__);
+				else $res = database_query($query,__FILE__,__LINE__,$this->db);
 				if(!$res) return ERR_MYSQL;
 				
 				$table=str_replace('#prefix#','',$table);
@@ -450,13 +481,13 @@ class object {
 				
 				$query="SELECT * FROM `$table` WHERE `table_id`=$input_id";
 				if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-				else $res = accounting_query($query,__FILE__,__LINE__);
+				else $res = database_query($query,__FILE__,__LINE__,$this->db);
 				if(!$res) return ERR_MYSQL;
 	
 				if($arr=mysql_fetch_array($res)) {
 					$query="DELETE FROM `$table` WHERE `id`='".$arr['id']."'";
 					if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-					else $res = accounting_query($query,__FILE__,__LINE__);
+					else $res = database_query($query,__FILE__,__LINE__,$this->db);
 					if(!$res) return ERR_MYSQL;
 					
 				}
@@ -485,7 +516,7 @@ class object {
 		
 		// first query run to get number of rows
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return '';
 
 		$this->num_total=mysql_num_rows($res);
@@ -500,7 +531,7 @@ class object {
 		
 		// query run to get head
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return '';
 		
 		$arr = mysql_fetch_assoc ($res);
@@ -508,7 +539,7 @@ class object {
 		
 		// query run to get head
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return '';
 		
 		$row = 1;						// $row[0] is the head
@@ -720,15 +751,13 @@ class object {
 		return $query;
 	}
 	
-	
-	
 	function commands($class) {
 		global $tpl;
 		
 		$records_found=false;
 		$query="SELECT * FROM `".$this->table."`";
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return '';
 
 		if(!mysql_num_rows($res)){
@@ -797,7 +826,7 @@ class object {
 			$records_found=false;
 			$query="SELECT * FROM `".$this->table."`";
 			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-			else $res = accounting_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
 			if(!$res) return '';
 
 			if(!mysql_num_rows($res)){
@@ -836,7 +865,7 @@ class object {
 		$tmp = '
 	<form name="search" action="'.$this->file.'">
 	<input type="hidden" name="class" value="'.$class.'">
-	<input type="text" onChange="document.search.submit()" name="data[search]" size="10" value="'.$this->search.'">
+	<input type="text" class="inputbox" onChange="document.search.submit()" name="data[search]" size="10" value="'.$_SESSION['last_search'].'">
 	<input type="image" src="'.ROOTDIR.'/images/find_small.png" alt="'.ucphr('SEARCH').'">';
 	
 	$tmp .= '
@@ -862,6 +891,16 @@ class object {
 			$this->category=$_REQUEST['data']['category'];
 	}
 	
+	function admin_edit_page ($class) {
+		global $tpl;
+		
+		if(!isset($this->templates['edit'])) $this->templates['edit']='menu';
+		$tpl -> set_admin_template_file ($this->templates['edit']);
+		$obj = new $class($this->id);
+		$tmp = $obj -> form();
+		$tpl -> assign("content", $tmp);
+	}
+	
 	function admin_list_page ($class) {
 		global $tpl;
 		$output = '';
@@ -877,6 +916,8 @@ class object {
 			return 0;
 		} elseif(empty($this -> search)) {
 			unset($_REQUEST['data']['global_search']);
+		} elseif(!empty($this -> search)) {
+			$_SESSION['last_search']=$this->search;
 		}
 		
 		$this -> commands_horizontal($class);
@@ -905,134 +946,122 @@ class object {
 		
 	}
 	
-	function admin_page ($class,$command,$start_data) {
+	function funCustomCommand ($class,$start_data) {
+		if(class_exists($class)) {
+			$obj = new $class;
+			if(method_exists($obj,'customCommand')) $obj->customCommand($start_data);
+			else $obj -> admin_edit_page($class);
+		}
+	}
+	
+	function funInsert($class,$start_data) {
+		$obj = new $class;
+		if(!$obj -> insert($start_data)) {
+			if(method_exists($obj,'post_insert_page')) $obj->post_insert_page($class);
+			else $obj -> admin_edit_page($class);
+		}
+	}
+	
+	function funUpdate($class,$start_data) {
 		global $tpl;
-		if(defined('SECURITY_STOP')) $command='access_denied';
-		
-		switch($command) {
-			case 'access_denied':
+		$obj = new $class($start_data['id']);
+		if($err=$obj -> update($start_data)) {
+			if(!$this->silent) {
+				$tmp = '<span class="error_msg">Error updating: '.$err.'</span><br>';
+				$tpl -> append("messages", $tmp);
+			}
+		}
+		if(method_exists($obj,'post_update_page')) $obj->post_update_page($class);
+		else $obj -> admin_edit_page($class);
+	}
+	
+	function funUpdateField ($class,$start_data) {
+		global $tpl;
+		$obj = new $class($start_data['id']);
+		if(method_exists($obj,'update_field')) {
+			if($err=$obj -> update_field($start_data['field'])) {
 				if(!$this->silent) {
-					$tmp = access_denied_admin();
+					$tmp = '<span class="error_msg">Error updating: '.$err.'</span><br>';
 					$tpl -> append("messages", $tmp);
 				}
-				break;
-			case 'new':
-				$tpl -> set_admin_template_file ('standard');
+			}
+		}
+		$obj -> admin_list_page($class);
+	}
+	
+	function funDelete ($class,$start_data) {
+		global $tpl;
+		
+		if(isset($_GET['deleteconfirm'])){
+			$deleteconfirm=$_GET['deleteconfirm'];
+		} elseif(isset($_POST['deleteconfirm'])){
+			$deleteconfirm=$_POST['deleteconfirm'];
+		}
+		if($deleteconfirm){
+			$tpl -> set_admin_template_file ('menu');
+			$delete=$_SESSION["delete"];
+			unset($_SESSION["delete"]);
 
-				$obj = new $class;
-				$tmp = $obj -> form();
-				$tpl -> assign("content", $tmp);
-				break;
-			case 'insert':
-				$obj = new $class;
-				if(!$obj -> insert($start_data)) {
-					if(method_exists($obj,'post_insert_page')) $obj->post_insert_page($class);
-					else $obj -> admin_list_page($class);
-				}
-				break;
-			case 'edit':
-				if(!isset($this->templates['edit'])) $this->templates['edit']='menu';
-				$tpl -> set_admin_template_file ($this->templates['edit']);
-				$obj = new $class($start_data['id']);
-				$tmp = $obj -> form();
-				$tpl -> assign("content", $tmp);
-				
-				if(method_exists($obj,'post_edit_page')) $obj->post_edit_page($class);
-				break;
-			case 'update':
-				$obj = new $class($start_data['id']);
-				if($err=$obj -> update($start_data)) {
+			if(is_array($delete)) {
+			for (reset ($delete); list ($key, $value) = each ($delete); ) {
+				$obj = new $class($value);
+				if($err=$obj -> delete($start_data)) {
 					if(!$this->silent) {
-						$tmp = '<span class="error_msg">Error updating: '.$err.'</span><br>';
+						$tmp = '<span class="error_msg">Error deleting: '.$err.'</span><br>';
 						$tpl -> append("messages", $tmp);
 					}
 				}
-				if(method_exists($obj,'post_update_page')) $obj->post_update_page($class);
+
+				unset($rate);
+			}
+			}
+			
+			if(count($delete)==1) {
+				if(method_exists($obj,'post_delete_page')) $obj->post_delete_page($class);
 				else $obj -> admin_list_page($class);
-				break;
-			case 'update_field':
-				$obj = new $class($start_data['id']);
-				if(method_exists($obj,'update_field')) {
-					if($err=$obj -> update_field($start_data['field'])) {
-						if(!$this->silent) {
-							$tmp = '<span class="error_msg">Error updating: '.$err.'</span><br>';
-							$tpl -> append("messages", $tmp);
-						}
+			} else {
+				$obj = new $class();
+				$obj -> admin_list_page($class);
+			}
+		} else {
+			$tpl -> set_admin_template_file ('standard');
+			if(isset($_REQUEST['delete'])){
+				$delete=$_REQUEST['delete'];
+			}
+
+			if(is_array($delete) || $delete=='all'){
+				if($delete=='all') {
+					$query = "SELECT `id` FROM ".$this->table;
+					if($this->flag_delete) $query .= " WHERE `deleted`=0";
+					if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+					else $res = database_query($query,__FILE__,__LINE__,$this->db);
+					if(!$res) return ERR_MYSQL;
+					
+					$delete_all = true;
+					unset($delete);
+					while ($arr = mysql_fetch_array($res)) {
+						$delete[]=$arr['id'];
 					}
 				}
-				$obj -> admin_list_page($class);
-				break;
-			case "delete":
-				if(isset($_GET['deleteconfirm'])){
-					$deleteconfirm=$_GET['deleteconfirm'];
-				} elseif(isset($_POST['deleteconfirm'])){
-					$deleteconfirm=$_POST['deleteconfirm'];
-				}
-				if($deleteconfirm){
-					$tpl -> set_admin_template_file ('menu');
-					$delete=$_SESSION["delete"];
-					unset($_SESSION["delete"]);
-	
-					if(is_array($delete)) {
-					for (reset ($delete); list ($key, $value) = each ($delete); ) {
-						$obj = new $class($value);
-						if($err=$obj -> delete($start_data)) {
-							if(!$this->silent) {
-								$tmp = '<span class="error_msg">Error deleting: '.$err.'</span><br>';
-								$tpl -> append("messages", $tmp);
+				$tmp = '<div align=center>';
+				if($delete_all) $tmp .= ucphr('DELETE_ALL_CONFIRM');
+				else $tmp .= ucphr('DELETE_RECORD_CONFIRM');
+				$tmp .= ' ('.count($delete).' '.ucphr('RECORDS').')';
+				$tmp .= "<br>\n";
+				$tmp .= ucphr('ACTION_IS_DEFINITIVE').".<br><br>\n";
+					$_SESSION["delete"]=$delete;
+					if(!$delete_all) {
+						for (reset ($delete); list ($key, $value) = each ($delete); ) {
+							$obj = new $class($value);
+							if(!$obj->no_name) {
+								$description=$obj -> name($_SESSION['language']);
+								unset($obj);
+								$tmp .= "<LI>".$description."</LI>";
 							}
 						}
-
-						unset($rate);
-					}
 					}
 					
-					if(count($delete)==1) {
-						if(method_exists($obj,'post_delete_page')) $obj->post_delete_page($class);
-						else $obj -> admin_list_page($class);
-					} else {
-						$obj = new $class();
-						$obj -> admin_list_page($class);
-					}
-				} else {
-					$tpl -> set_admin_template_file ('standard');
-					if(isset($_REQUEST['delete'])){
-						$delete=$_REQUEST['delete'];
-					}
-	
-					if(is_array($delete) || $delete=='all'){
-						if($delete=='all') {
-							$query = "SELECT `id` FROM ".$this->table;
-							if($this->flag_delete) $query .= " WHERE `deleted`=0";
-							if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-							else $res = accounting_query($query,__FILE__,__LINE__);
-							if(!$res) return ERR_MYSQL;
-							
-							$delete_all = true;
-							unset($delete);
-							while ($arr = mysql_fetch_array($res)) {
-								$delete[]=$arr['id'];
-							}
-						}
-						$tmp = '<div align=center>';
-						if($delete_all) $tmp .= ucphr('DELETE_ALL_CONFIRM');
-						else $tmp .= ucphr('DELETE_RECORD_CONFIRM');
-						$tmp .= ' ('.count($delete).' '.ucphr('RECORDS').')';
-						$tmp .= "<br>\n";
-						$tmp .= ucphr('ACTION_IS_DEFINITIVE').".<br><br>\n";
-							$_SESSION["delete"]=$delete;
-							if(!$delete_all) {
-								for (reset ($delete); list ($key, $value) = each ($delete); ) {
-									$obj = new $class($value);
-									if(!$obj->no_name) {
-										$description=$obj -> name($_SESSION['language']);
-										unset($obj);
-										$tmp .= "<LI>".$description."</LI>";
-									}
-								}
-							}
-							
-							$tmp .= '
+					$tmp .= '
 		<table>
 			<tr>
 				<td>
@@ -1057,18 +1086,61 @@ class object {
 				</td>
 			</tr>
 		</table>';
-							$tmp .= '</div>';
-							$tpl -> assign("content", $tmp);
-					} else {
-						if(!$this->silent) {
-							$tmp = '<span class="error_msg">'.ucphr('NO_RECORD_SELECTED').'.</span><br>';
-							$tpl -> append("messages", $tmp);
-						}
-					}
-
+					$tmp .= '</div>';
+					$tpl -> assign("content", $tmp);
+			} else {
+				if(!$this->silent) {
+					$tmp = '<span class="error_msg">'.ucphr('NO_RECORD_SELECTED').'.</span><br>';
+					$tpl -> append("messages", $tmp);
+				}
+			}
+	
+		}
+	}
+	
+	function admin_page ($class,$command,$start_data) {
+		global $tpl;
+		if(defined('SECURITY_STOP')) $command='access_denied';
+		
+		switch($command) {
+			case 'access_denied':
+				if(!$this->silent) {
+					$tmp = access_denied_admin();
+					$tpl -> append("messages", $tmp);
 				}
 				break;
+			case 'new':
+				$tpl -> set_admin_template_file ('standard');
+
+				$obj = new $class;
+				$tmp = $obj -> form();
+				$tpl -> assign("content", $tmp);
+				break;
+			case 'insert':
+				$this->funInsert($class,$start_data);
+				break;
+			case 'edit':
+				if(!isset($this->templates['edit'])) $this->templates['edit']='menu';
+				$tpl -> set_admin_template_file ($this->templates['edit']);
+				$obj = new $class($start_data['id']);
+				$tmp = $obj -> form();
+				$tpl -> assign("content", $tmp);
+				
+				if(method_exists($obj,'post_edit_page')) $obj->post_edit_page($class);
+				break;
+			case 'update':
+				$this -> funUpdate ($class,$start_data);
+				break;
+			case 'update_field':
+				$this -> funUpdateField ($class,$start_data);
+				break;
+			case "delete":
+				$this -> funDelete ($class,$start_data);
+				break;
 			case 'stop':
+				break;
+			case 'custom':
+				$this -> funCustomCommand ($class,$start_data);
 				break;
 			default:
 				$obj = new $class;

@@ -187,6 +187,8 @@ function takeaway_get_customer_data($sourceid){
 		$data['takeaway_hour']=substr($takeaway_time,8,2);
 		$data['takeaway_minute']=substr($takeaway_time,10,2);
 	}
+	$data['takeaway_unixtime']=mktime(
+	$data['takeaway_hour'], $data['takeaway_minute'], 0, $data['takeaway_month'], $data['takeaway_day'], $data['takeaway_year']);
 	// some data is found. we return it.
 	if($takeaway_time && !empty($data['takeaway_surname'])) {
 		return $data;
@@ -198,7 +200,7 @@ function takeaway_get_customer_data($sourceid){
 	$data['takeaway_year'] = date("Y",time());
 	$data['takeaway_hour'] = date("H",time());
 	$data['takeaway_minute'] = date("i",time());
-
+	$data['takeaway_unixtime']=time();
 	return $data;
 }
 

@@ -20,6 +20,9 @@ $link = mysql_pconnect ($cfgserver, $cfguser,$cfgpassword) or die (GLOBALMSG_DB_
 
 $_SESSION['common_db']=$db_common;
 
+$modManager = new modManager;
+if(is_array($modules)) $modManager -> addModule ($modules);
+
 check_db_status();
 
 start_language ();

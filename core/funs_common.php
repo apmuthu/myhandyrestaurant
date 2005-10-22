@@ -58,11 +58,7 @@ function check_db_status () {
 		$url=ROOTDIR.'/install.php?command=fresh_install';
 		header('Location: '.$url);
 		$error_msg = common_header ('Database tables not found');
-		$error_msg .= redirectJS ($url);			/*RTG: I prefer to get a exception in somewhere in my code I use a not existing lang
-			//(by the way, mysql_list_tables is deprecated)  // K: substituted with show tables query
-			K: I don't agree. we simply call this functions for a lang, then it autonomously decides which table to use,
-			This makes the function call easier.
-			*/
+		$error_msg .= redirectJS ($url);
 		$error_msg .= 'No table found on the database. Going to installation page.';
 		$error_msg .= common_bottom ();
 		echo $error_msg;
@@ -230,17 +226,20 @@ function database_query($query,$file,$line,$db,$silent=false) {
 	$query = database_query_translator ($query);
 
 	
-	$start = microtime ();
+	if(CONF_DEBUG_PRINT_GENERATING_TIME) $start = microtime ();
 	mysql_select_db($db);
 	$res=@mysql_query($query);
-	$end = microtime ();
+	if(CONF_DEBUG_PRINT_GENERATING_TIME) $end = microtime ();
 	
-	$start = explode (" ", $start);
-	$start = (float)$start[0] + (float)$start[1];
-	$end = explode (" ", $end);
-	$end = (float)$end[0] + (float)$end[1];
+	if(CONF_DEBUG_PRINT_GENERATING_TIME)
+	{
+		$start = explode (" ", $start);
+		$start = (float)$start[0] + (float)$start[1];
+		$end = explode (" ", $end);
+		$end = (float)$end[0] + (float)$end[1];
+		$elapsed = $end - $start;
+	}
 
-	$elapsed = $end - $start;
 	
 	if(!isset($GLOBALS['mysql_queries'])) $GLOBALS['mysql_queries']=array();
 	if(!isset($GLOBALS['mysql_queries_doubles'])) $GLOBALS['mysql_queries_doubles']=array();
@@ -250,9 +249,9 @@ function database_query($query,$file,$line,$db,$silent=false) {
 	$GLOBALS['mysql_queries'][] = $query;
 	
 	if(CONF_DEBUG_DISPLAY_MYSQL_QUERIES) {
-		$GLOBALS['mysql_queries_list'][] = $query.' - '.$file.' - '.$line;
+		$GLOBALS['mysql_queries_list'][] = $file.' - '.$line."\n".$query;
 	}
-	$GLOBALS['mysql_timer'] = $GLOBALS['mysql_timer'] + $elapsed;
+	if(CONF_DEBUG_PRINT_GENERATING_TIME) $GLOBALS['mysql_timer'] = $GLOBALS['mysql_timer'] + $elapsed;
 	
 	if($errno=mysql_errno()) {
 		$msg="Error in ".__FUNCTION__." - ";
@@ -659,15 +658,17 @@ $tmp = '';
 $tmp .= '
 <table bgcolor="'.color(-1).'">';
 
-if(is_array($var)){
+if(is_array($var) || is_object($var)){
+	if(is_object($var)) $var = get_object_vars($var);
+	
 	foreach ($var as $key=>$value) {
 	$tmp .= '
 	<tr bgcolor="'.color($i).'">
 		<td>['.$key.']</td>
 		<td>';
-		if(is_array($value)) {
-			$tmp .= var_dump_table($var[$key]);
-		} else $tmp .= $value;
+		if(is_array($value)|| is_object($value)) {
+			$tmp .= var_dump_table($value);
+		} else $tmp .= htmlentities($value);
 		$tmp .= '
 		</td>
 	</tr>';
@@ -901,7 +902,16 @@ function get_conf($file,$line,$name){
 	return $ret;
 }
 
-function common_find_first_db($db_wanted='') {
+function commonTableExists ($db,$table)
+{
+	$table = database_query_translator ($table);
+	$tmp=@mysql_list_fields($db,$table);
+	if($tmp==-1 || $tmp==0) return false;
+	
+	return true;
+}
+
+function commonFindFirstAccountingDB ($db_wanted='') {
 	if(!empty($db_wanted)) {
 		$query="SELECT * FROM `#prefix#accounting_dbs` WHERE `db`='$db_wanted'";
 		$res=common_query($query,__FILE__,__LINE__);
@@ -993,6 +1003,10 @@ function help_sticky ($msg_code) {
 	
 	$help=strip_newlines(ucphr($msg_code.'_HELP'));
 	$title=strip_newlines(ucphr($msg_code));
+	
+	// no help msg found
+	if($help==$msg_code.'_HELP') return '';
+	
 	$help=str_replace("'","\'",$help);
 	$title=str_replace("'","\'",$title);
 	
@@ -1115,7 +1129,7 @@ function unset_session_vars(){
 	unset($_SESSION['separated']);
 	unset($_SESSION['extra_care']);
 	unset($_SESSION['type']);
-	unset($_SESSION['account']);
+	//unset($_SESSION['mgmt_db']);
 	unset($_SESSION['select_all']);
 	return 0;
 }
@@ -1125,7 +1139,7 @@ function unset_source_vars(){
 	unset($_SESSION['separated']);
 	unset($_SESSION['extra_care']);
 	unset($_SESSION['type']);
-	unset($_SESSION['account']);
+	//unset($_SESSION['mgmt_db']);
 	unset($_SESSION['select_all']);
 	return 0;
 }
@@ -1277,19 +1291,7 @@ function generating_time($inizio){
 
 	$output = '</center><div align="left">';
 	
-	if(CONF_DEBUG_PRINT_GENERATING_TIME &&
-	CONF_DEBUG_PRINT_GENERATING_TIME_ONLY_IF_HIGH &&
-	$intervallo>=CONF_DEBUG_PRINT_GENERATING_TIME_TRESHOLD){
-		$output .= '<br><font color="#F10404"><b>'.$intervallo.'</b>
-			'.ucfirst(phr('SECONDS_TO_GENERATE_THE_PAGE')).'.</font><br>';
-		$msg='Generating time over max ('.CONF_DEBUG_PRINT_GENERATING_TIME_TRESHOLD.'): '.$intervallo.' secs reached';
-		error_msg(__FILE__,__LINE__,$msg);
-	}
-	elseif(CONF_DEBUG_PRINT_GENERATING_TIME &&
-	CONF_DEBUG_PRINT_GENERATING_TIME_ONLY_IF_HIGH &&
-	$intervallo<CONF_DEBUG_PRINT_GENERATING_TIME_TRESHOLD){
-		// do nothing because we're under treshold and only want to see if we're over it
-	} elseif(CONF_DEBUG_PRINT_GENERATING_TIME && !CONF_DEBUG_PRINT_GENERATING_TIME_ONLY_IF_HIGH){
+	if(CONF_DEBUG_PRINT_GENERATING_TIME){
 		$output .= '<br><b>'.$intervallo.'</b>
 			'.ucfirst(phr('SECONDS_TO_GENERATE_THE_PAGE')).'.<br>';
 		$sql_time=round($GLOBALS['mysql_timer'],5);
@@ -1327,14 +1329,14 @@ function generating_time($inizio){
 		}
 		arsort($GLOBALS['mysql_queries_doubles_ord']['times']);
 		
-		$output .= '<hr><b>'.count($GLOBALS['mysql_queries_doubles']).' double queries</b> (most requested first)<br>'."\n";
+		$output .= '<hr><b>'.count($GLOBALS['mysql_queries_doubles']).' unneeded (double) queries</b> (most requested first)<br>'."\n";
 		foreach ($GLOBALS['mysql_queries_doubles_ord']['times'] as $index => $times) {
 			$query = $GLOBALS['mysql_queries_doubles_ord']['query'][$index];
-			$output .= $times.'x - '.$query.'<br>'."\n";
+			$output .= ($times + 1).'x - '.nl2br($query).'<br>'."\n";
 		}
 		$output .= '<hr><b>All '.count($GLOBALS['mysql_queries']).' queries</b> (chronological order)<br>'."\n";
 		foreach ($GLOBALS['mysql_queries_list'] as $query) {
-			$output .= $query.'<br>'."\n";
+			$output .= nl2br($query).'<br>'."\n";
 		}
 	}
 

@@ -73,8 +73,22 @@ class dish extends object {
 	*/
 	function search_name_rows ($search) {
 	
-		$query="SELECT #prefix#dishes.id, 
-		#prefix#dishes#lang#.table_name
+		$search=strtolower($search);
+		
+		/*
+		* Searches for a dish by partial name
+		* if dish is given as search string it will find the following dishes:
+		* dishname
+		* dish
+		* dish with many words
+		* Main dish
+		* DISH
+		* Dish
+		*/
+		
+		$query="SELECT #prefix#dishes.id,
+		#prefix#dishes#lang#.table_name,
+		#prefix#dishes.name
 		FROM `#prefix#dishes`
 		JOIN `#prefix#dishes#lang#` ON #prefix#dishes.id=#prefix#dishes#lang#.table_id
 		WHERE (LCASE(`table_name`) LIKE '".$search."%'
@@ -100,6 +114,74 @@ class dish extends object {
 		}
 		
 		return 0;
+	}
+	
+	function print_menu_andrea () {
+		$output = '';
+		
+		$query="SELECT id, name FROM mhr_categories order by id asc";
+		$resCat=common_query($query,__FILE__,__LINE__);
+		if(!$resCat) return '';
+		
+		while ($arrCat = mysql_fetch_array($resCat)) {
+			$output .= '
+<table border=0 width="100%">
+	<tr>
+		<td colspan=3 align=center><h2>'.$arrCat['name'].'</h2></td>
+	</tr>';
+			$query="SELECT  id, name, price FROM  mhr_dishes where category=".$arrCat['id'];
+			$res=common_query($query,__FILE__,__LINE__);
+			if(!$res) return '';
+			while ($arr = mysql_fetch_array($res)) {
+				$output .= '
+	<tr>
+		<td width="10%">'.$arr['id'].'</td>   
+		<td width="80%">'.$arr['name'].'</td>
+		<td width="10%">'.$arr['price'].'</td>
+	</tr>';
+			}
+			$output .= '
+</table>';
+		}
+		return $output;
+	}
+	
+	function print_menu_html () {
+		$output = '';
+		
+		$query = $this->list_query_all();
+		$query .= ' ORDER BY category';
+		$res = common_query($query,__FILE__,__LINE__);
+		if(!$res) return '';
+		
+		$output .= '
+<table border=0 width="100%">';
+		while ($arr = mysql_fetch_array($res)) {
+			$output .= '
+	<tr>
+		<td>'.$arr['category'].'</td>
+		<td width="10%">'.$arr['id'].'</td>   
+		<td width="80%">'.$arr['name'].'</td>
+		<td width="10%">'.$arr['price'].'</td>
+	</tr>';
+		}
+		$output .= '
+</table>';
+		return $output;
+	}
+	
+	function print_menu_cvs () {
+		$output = '';
+		
+		$query = $this->list_query_all();
+		$query .= ' ORDER BY category';
+		$res = common_query($query,__FILE__,__LINE__);
+		if(!$res) return '';
+		
+		while ($arr = mysql_fetch_array($res)) {
+			$output .= $arr['category'].','.$arr['id'].','.$arr['name'].','.$arr['price']."\n";
+		}
+		return $output;
 	}
 	
 	function sync_dish_ingredients () {
@@ -133,14 +215,16 @@ class dish extends object {
 		
 		$table = $this->table;
 		$lang_table = $table."_".$_SESSION['language'];
+		$cat_table = "#prefix#categories_".$_SESSION['language'];
 		
 		$query="SELECT
 				$table.`id`,
-				IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
+				CONCAT_WS(' - ',IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`),$cat_table.table_name) as `name`,
 				RPAD('".ucphr('DISHES')."',30,' ') as `table`,
-				".TABLE_DISHES." as `table_id`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
 				LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
+				LEFT JOIN $cat_table ON $cat_table.table_id=$table.category
 				WHERE $table.`deleted`='0'
 				AND ($lang_table.`table_name` LIKE '%$search%' OR $table.`name` LIKE '%$search%')
 				";
@@ -156,21 +240,21 @@ class dish extends object {
 		$printer_table = "#prefix#dests";
 		
 		$query="SELECT
-				$table.`id`,
-				IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
-				$printer_table.`name` as `destid`,
-				$table.`price`,
-				IF($cat_lang_table.`table_name`='' OR $cat_lang_table.`table_name` IS NULL,$cat_table.`name`,$cat_lang_table.`table_name`) as `category`,
-				IF($table.`autocalc`='0','".ucphr('NO')."','".ucphr('YES')."') as `autocalc`,
-				IF($table.`generic`='0','".ucphr('NO')."','".ucphr('YES')."') as `generic`,
-				IF($table.`visible`='0','".ucphr('NO')."','".ucphr('YES')."') as `visible`
-				FROM `$table`
-				LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
-				LEFT JOIN `$cat_table` ON $cat_table.`id`=$table.`category`
-				LEFT JOIN `$cat_lang_table` ON $cat_lang_table.`table_id`=$table.`category`
-				LEFT JOIN `$printer_table` ON $printer_table.`id`=$table.`destid`
-				WHERE $table.`deleted`='0'
-				";
+			$table.`id`,
+			IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
+			$printer_table.`name` as `destid`,
+			$table.`price`,
+			IF($cat_lang_table.`table_name`='' OR $cat_lang_table.`table_name` IS NULL,$cat_table.`name`,$cat_lang_table.`table_name`) as `category`,
+			IF($table.`autocalc`='0','".ucphr('NO')."','".ucphr('YES')."') as `autocalc`,
+			IF($table.`generic`='0','".ucphr('NO')."','".ucphr('YES')."') as `generic`,
+			IF($table.`visible`='0','".ucphr('NO')."','".ucphr('YES')."') as `visible`
+			FROM `$table`
+			LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
+			LEFT JOIN `$cat_table` ON $cat_table.`id`=$table.`category`
+			LEFT JOIN `$cat_lang_table` ON $cat_lang_table.`table_id`=$table.`category`
+			LEFT JOIN `$printer_table` ON $printer_table.`id`=$table.`destid`
+			WHERE $table.`deleted`='0'
+			";
 		
 		if(isset($this->category) && $this->category) $query.= " AND $table.`category`=".$this->category;
 		
@@ -264,11 +348,13 @@ class dish extends object {
 
 		if($lang_del=$this->translations_delete($this->id)) return $lang_del;
 
-		$stock = new stock_object;
-		if ($stock_id=$stock->find_external($this->id, TYPE_DISH)) {
-			$stock = new stock_object($stock_id);
-			$stock->silent=true;
-			if($err=$stock->delete()) return $err;
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
+			$stock = new stock_object;
+			if ($stock_id=$stock->find_external($this->id, TYPE_DISH)) {
+				$stock = new stock_object($stock_id);
+				$stock->silent=true;
+				if($err=$stock->delete()) return $err;
+			}
 		}
 		
 		return $input_data;
@@ -296,7 +382,10 @@ class dish extends object {
 			$ingreds = explode (" ", $ingreds);
 			foreach($ingreds as $key => $value) if($value==$ingredid) unset ($ingreds[$key]);
 			$ingreds = implode (" ", $ingreds);
-			if($err = $this -> set ('ingreds',$ingreds)) return $err;
+			if($err = $this -> set ('ingreds',$ingreds)) {
+				error_msg(__FILE__,__LINE__,'Error setting dish included ingredients (dish: '.$this -> id.')');
+				return $err;
+			}
 		}
 		
 		$ingreds = $this->get('dispingreds');
@@ -305,7 +394,10 @@ class dish extends object {
 			$ingreds = explode (" ", $ingreds);
 			foreach($ingreds as $key => $value) if($value==$ingredid) unset ($ingreds[$key]);
 			$ingreds = implode (" ", $ingreds);
-			if($err = $this -> set ('dispingreds',$ingreds)) return $err;
+			if($err = $this -> set ('dispingreds',$ingreds)) {
+				error_msg(__FILE__,__LINE__,'Error setting dish available ingredients (dish: '.$this -> id.')');
+				return $err;
+			}
 		}
 		return 0;
 	}
@@ -313,15 +405,15 @@ class dish extends object {
 	//RTG: included for performance, better than generic get that imply one query
 	//see use in
 	function getPrice() {
-		return $this->data['price'];   
+		return $this->data['price'];
 	}
 	
 	function getGeneric() {
-		return $this->data['generic'];   
+		return $this->data['generic'];
 	}
 	
 	function getAutocalc() {
-		return $this->data['autocalc'];   
+		return $this->data['autocalc'];
 	} 
 	
 	function ingredients_names() {
@@ -403,7 +495,7 @@ class dish extends object {
 
 	function post_edit_page ($class) {
 		/*
-		if(class_exists('stock_movement')) {
+		if(class_exists('stock_movement') && stock_object::stockEnabled()) {
 			$mov = new stock_movement();
 			$mov -> only_dish = $this->id;
 			$mov -> admin_list_page('stock_movement');
@@ -427,6 +519,12 @@ class dish extends object {
 		} elseif ($input_data['name']=="") {
 			$input_data['name']=$input_data[$name_found];
 		}
+		
+		/*
+		if($this->nameExists($input_data['name'])) {
+			$msg=ucfirst(phr('CODE_EXISTS'));
+		}
+		*/
 		
 		$input_data['price'] = eq_to_number ($input_data['price']);
 		if($input_data['price']==="") {
@@ -468,13 +566,8 @@ class dish extends object {
 	
 		return $input_data;
 	}
-
-	function form ($input_data=array()) {
-		return $this->form_new($input_data);
-		return $this->form_old($input_data);
-	}
 	
-	function form_new ($input_data=array()) {
+	function form ($input_data=array()) {
 		global $tpl;
 		if($_REQUEST['data']['show_names']) $input_data['show_names']=true;
 		$this -> commands_horizontal(get_class($this));
@@ -877,7 +970,7 @@ class dish extends object {
 		
 		if(!$editing) return $output;
 		
-		if(class_exists('stock_movement')) {
+		if(class_exists('stock_movement') && stock_object::stockEnabled()) {
 			$mov = new stock_movement();
 			$mov -> only_dish = $this->id;
 			$mov->admin_pre_list();
@@ -885,7 +978,7 @@ class dish extends object {
 			$tpl->assign('moviments',$tmp);
 		}
 		
-		if(class_exists('stock_object')) {
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
 			if(count($this->ingredients()) || count($this->dispingredients())) {
 				$obj = new stock_dish ($this->id);
 				$obj -> form_properties['show_name'] = false;
@@ -893,7 +986,8 @@ class dish extends object {
 				$tmp = $obj->available_quantity_form();
 				$tpl->assign('stock_data',$tmp);
 				
-				$tmp = $obj->form();
+				$data['from_dish'] = true;
+				$tmp = $obj->form($data);
 				$tpl->assign('ingredients_quantities',$tmp);
 			}
 		}

@@ -29,8 +29,12 @@
 
 class stock_ingredient_quantity extends object {
 	function stock_ingredient_quantity ($id=0) {
-		$this -> db = 'common';
+		$this -> db = get_conf(__FILE__,__LINE__,'stockDB');
 		$this->table=$GLOBALS['table_prefix'].'stock_ingredient_quantities';
+		
+		if(!commonTableExists($this->db,$this->table)) $this->disabled=true;
+		else $this->disabled=false;
+		
 		$this->id=$id;
 		$this->fields_names=array(	'id'=>ucphr('ID'));
 		$this -> title = ucphr('INGREDIENTS');
@@ -47,7 +51,7 @@ class stock_ingredient_quantity extends object {
 				AND `dish_id`='".$dish_id."'";
 		
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return 0;
 		
 		if($arr=mysql_fetch_assoc ($res)) return $arr['id'];
@@ -62,7 +66,7 @@ class stock_ingredient_quantity extends object {
 				AND `dish_id`='".$this->data['dish_id']."'";
 		
 		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
-		else $res = accounting_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return 0;
 		
 		while($arr=mysql_fetch_assoc ($res)) {

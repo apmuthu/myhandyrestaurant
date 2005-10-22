@@ -27,6 +27,7 @@
 * @copyright		Copyright 2003-2005, Fabio De Pascale
 */
 
+/*
 class customer extends object {
 	function customer($id=0) {
 		$this -> db = 'common';
@@ -35,7 +36,7 @@ class customer extends object {
 		$this -> fetch_data();
 	}
 }
-
+*/
 
 function customer_search_page($data=array()) {
 	global $tpl;
@@ -114,7 +115,7 @@ function customer_list_table_head() {
 	<table cellspacing="2" bgcolor="'.COLOR_TABLE_GENERAL.'">
 	<thead>
 	<th>'.ucfirst(phr('ID')).'</th>
-	<th>'.ucfirst(phr('SURNAME')).'</th>
+	<th>'.ucfirst(phr('NAME')).'</th>
 	<th>'.ucfirst(phr('PHONE')).'</th>
 	<th>'.ucfirst(phr('ADDRESS')).'</th>
 	<th>'.ucfirst(phr('EMAIL')).'</th>
@@ -145,6 +146,7 @@ function customer_recognize ($term='') {
 	$query .= " OR `address` LIKE '%$term%'";
 	$query .= " OR `email` LIKE '%$term%'";
 	$query .= " OR `vat_account` LIKE '%$term%'";
+	$query .= " AND `deleted`='0'";
 	$query .= " ORDER BY `surname` ASC";
 
 	$res=common_query($query,__FILE__,__LINE__);
@@ -175,10 +177,14 @@ function customer_list($term='') {
 	$query = "SELECT * FROM `#prefix#customers`";
 	if(!empty($term)) {
 		$query .= " WHERE `surname` LIKE '%$term%'";
+		$query .= " OR `name` LIKE '%$term%'";
 		$query .= " OR `phone` LIKE '%$term%'";
 		$query .= " OR `address` LIKE '%$term%'";
 		$query .= " OR `email` LIKE '%$term%'";
 		$query .= " OR `vat_account` LIKE '%$term%'";
+		$query .= " AND `deleted`='0'";
+	} else {
+		$query .= " WHERE `deleted`='0'";
 	}
 	$query .= " ORDER BY `surname` ASC";
 
@@ -206,7 +212,7 @@ function customer_list_row($arr) {
 	$msg = '
 	<tr>
 		<td>'.$arr['id'].'</td>
-		<td><a href="orders.php?command=set_customer&amp;data[takeaway_surname]='.$arr['surname'].'&amp;data[customer]='.$arr['id'].'">'.$arr['surname'].'</a></td>
+		<td><a href="orders.php?command=set_customer&amp;data[takeaway_surname]='.$arr['surname'].'&amp;data[customer]='.$arr['id'].'">'.$arr['surname'].' '.$arr['name'].'</a></td>
 		<td>'.$arr['phone'].'</td>
 		<td>'.$arr['address'].'</td>
 		<td>'.$arr['email'].'</td>
@@ -242,6 +248,17 @@ function customer_search_form() {
 }
 
 function customer_insert($input_data){
+	$obj = new customer();
+	
+	$tmp=$obj->silent;
+	$obj->silent=true;
+	if($res=$obj -> insert ($input_data)) {
+		$obj->silent=$tmp;
+		return $res;
+	}
+	$obj->silent=$tmp;
+		
+/*	
 	$input_data=customer_check_values($input_data);
 	if(!is_array($input_data)) return $input_data;
 
@@ -262,25 +279,20 @@ function customer_insert($input_data){
 
 	$res=common_query($query,__FILE__,__LINE__);
 	if(!$res) return ERR_MYSQL;
-
+*/
 	return 0;
 }
 
 function customer_edit($input_data){
-	$input_data=customer_check_values($input_data);
-	if($input_data<0) return $input_data;
-
-	// Now we'll build the correct UPDATE query, based on the fields provided
-	$query="UPDATE `#prefix#customers` SET ";
-	for (reset ($input_data); list ($key, $value) = each ($input_data); ) {
-		$query.="`".$key."`='".$value."',";
+	$obj = new customer($input_data['id']);
+	
+	$tmp=$obj->silent;
+	$obj->silent=true;
+	if($res=$obj -> update ($input_data)) {
+		$obj->silent=$tmp;
+		return $res;
 	}
-	// strips the last comma that has been put
-	$query = substr ($query, 0, strlen($query)-1);
-	$query.=" WHERE `id`='".$input_data['id']."'";
-
-	$res=common_query($query,__FILE__,__LINE__);
-	if(!$res) return ERR_MYSQL;
+	$obj->silent=$tmp;
 	
 	return 0;
 }
@@ -300,6 +312,7 @@ function customer_edit_form($data) {
 	global $tpl;
 	
 	$query="SELECT * FROM `#prefix#customers` WHERE `id`='".$data['id']."'";
+	$query .= " AND `deleted`='0'";
 	$res=common_query($query,__FILE__,__LINE__);
 	if(!$res) return ERR_MYSQL;
 

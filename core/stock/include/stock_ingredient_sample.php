@@ -29,7 +29,7 @@
 
 class stock_ingredient_sample extends object {
 	function stock_ingredient_sample ($id=0) {
-		$this -> db = 'common';
+		$this -> db = get_conf(__FILE__,__LINE__,'stockDB');
 		$this->table=$GLOBALS['table_prefix'].'stock_ingredient_samples';
 		$this->id=$id;
 		$this->fields_names=array(	'id'=>ucphr('ID'));

@@ -28,6 +28,8 @@
 */
 
 class printer extends object {
+	var $tmp;
+	
 	function printer($id=0) {
 		$this -> db = 'common';
 		$this->table=$GLOBALS['table_prefix'].'dests';
@@ -59,7 +61,7 @@ class printer extends object {
 				$table.`id`,
 				$table.`name`,
 				RPAD('".ucphr('PRINTERS')."',30,' ') as `table`,
-				".TABLE_PRINTERS." as `table_id`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
 				WHERE $table.`name` LIKE '%$search%'
 				";
@@ -69,27 +71,105 @@ class printer extends object {
 	
 	function list_query_all () {
 		$table = $this->table;
+		//$tblPaymentdocPrinters = '#prefix#paymentdocs_printers';
 		
 		$query="SELECT
 				$table.`id`,
 				$table.`name`,
 				$table.`dest`,
 				$table.`driver`,
-				IF($table.`bill`='0','".ucphr('NO')."','".ucphr('YES')."') as `bill`,
-				IF($table.`invoice`='0','".ucphr('NO')."','".ucphr('YES')."') as `invoice`,
-				IF($table.`receipt`='0','".ucphr('NO')."','".ucphr('YES')."') as `receipt`,
 				$table.`language`,
 				$table.`template`
-				 FROM `$table`
-				 WHERE `deleted`='0'
+				FROM `$table`
+				WHERE $table.`deleted`='0'
 				";
 		
 		return $query;
 	}
 	
+	function post_insert ($input_data) {
+		global $modManager;
+		
+		foreach($this->tmp as $name=>$value)
+		{
+			if($name=='paymentdoc')
+			foreach($value as $paymentdoc)
+			{
+				$msg = new message;
+				$msg->setPreviousMsgs($this->previousMsgs);
+				$msg->setProperty('command','mhrPaymentdocsprinter_addPaymentdocsprinter');
+				$msg->setProperty('class',$paymentdoc);
+				$msg->setProperty('printer',$this->id);
+				$msg->setType(MSG_TYPE_CONFIG);
+				$modManager->distrMsg($msg);
+				
+				$obj = new paymentdocs_printer;
+				$res=$obj->insertIfNotExists($paymentdoc,$this->id);
+			}
+		}
+		return $input_data;
+	}
+	
+	function post_update ($input_data) {
+		global $modManager;
+		
+		if(!is_array($this->tmp) || !is_array($this->tmp['paymentdoc']))
+		{
+			$msg = new message;
+			$msg->setPreviousMsgs($this->previousMsgs);
+			$msg->setProperty('command','mhrPaymentdocsprinter_deleteAllPaymentdocsprinter');
+			$msg->setProperty('printer',$this->id);
+			$msg->setType(MSG_TYPE_CONFIG);
+			$modManager->distrMsg($msg);
+			return $input_data;
+		}
+		
+		if($modManager->moduleExists('paymentdoc'))
+		{
+			
+			$paymentdocs= new paymentdoc;
+			$docs=$paymentdocs->getPaymentdocs();
+			
+			foreach($docs as $paymentdoc)
+			{
+				if(in_array($paymentdoc,$this->tmp['paymentdoc']))
+				{
+					$msg = new message;
+					$msg->setPreviousMsgs($this->previousMsgs);
+					$msg->setProperty('command','mhrPaymentdocsprinter_addPaymentdocsprinter');
+					$msg->setProperty('class',$paymentdoc);
+					$msg->setProperty('printer',$this->id);
+					$msg->setType(MSG_TYPE_CONFIG);
+					$modManager->distrMsg($msg);
+				} else
+				{
+					$msg = new message;
+					$msg->setPreviousMsgs($this->previousMsgs);
+					$msg->setProperty('command','mhrPaymentdocsprinter_deletePaymentdocsprinter');
+					$msg->setProperty('class',$paymentdoc);
+					$msg->setProperty('printer',$this->id);
+					$msg->setType(MSG_TYPE_CONFIG);
+					$modManager->distrMsg($msg);
+				}
+			}
+		}
+		
+		return $input_data;
+	}
+	
 	function check_values($input_data){
 
 		$msg="";
+		
+		foreach($input_data as $name=>$value)
+		{
+			if($name=='paymentdoc')
+			{
+				$this->tmp[$name]=$value;
+				unset($input_data[$name]);
+			}
+		}
+		
 		if($input_data['name']=="") {
 			$msg=ucfirst(phr('CHECK_NAME'));
 		}
@@ -105,15 +185,16 @@ class printer extends object {
 			</script>\n";
 			return 2;
 		}
-
-	if(!$input_data['bill'])
-		$input_data['bill']=0;
-
-	if(!$input_data['invoice'])
-		$input_data['invoice']=0;
-
-	if(!$input_data['receipt'])
-		$input_data['receipt']=0;
+/*
+		if(!$input_data['bill'])
+			$input_data['bill']=0;
+	
+		if(!$input_data['invoice'])
+			$input_data['invoice']=0;
+	
+		if(!$input_data['receipt'])
+			$input_data['receipt']=0;
+*/
 
 
 		return $input_data;
@@ -234,7 +315,31 @@ class printer extends object {
 		$output .= '
 			</select>
 			</td>
-		</tr>
+		</tr>';
+		
+		if(class_exists('paymentdoc'))
+		{
+			$paymentdocsPrinters=new paymentdocs_printer;
+			$paymentdocs=new paymentdoc;
+			$docs=$paymentdocs->getPaymentdocs();
+			
+			foreach($docs as $paymentdoc)
+			{
+				$obj = new $paymentdoc;
+				
+				if($editing && $paymentdocsPrinters->paymentdocPrinterExists ($paymentdoc,$this->id)) $checked = ' checked';
+				else $checked='';
+				$output .= '
+				<tr>
+					<td colspan="2">
+					<input type="checkbox" name="data[paymentdoc][]" value="'.$paymentdoc.'"'.$checked.'>'.$obj->title.'
+					</td>
+				</tr>';
+			}
+		}
+		
+		/*
+		$output .= '
 		<tr>
 			<td colspan="2">
 			<input type="checkbox" name="data[bill]" value="1"';
@@ -255,7 +360,9 @@ class printer extends object {
 		if($arr['receipt']) $output .= ' checked';
 		$output .= '>'.ucphr('PRINTER_RECEIPT').'
 			</td>
-		</tr>
+		</tr>';
+		*/
+		$output .= '
 		<tr>
 			<td colspan=2 align="center">
 			<table>

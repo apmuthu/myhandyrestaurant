@@ -66,6 +66,7 @@ a:hover { color: #CC0000; text-decoration: none}
 .invisible {font-size: 0pt; color: #FFFFFF; text-decoration: none; }
 
 .preferred_answer { font-size: 150%; }
+.inputbox { font-size: 90%; }
 
 .error_msg { color: red; align: center }
 .page_title { font-family: Arial, Helvetica, sans-serif; font-size: 150%; font-weight: bold}

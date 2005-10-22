@@ -27,6 +27,7 @@
 * @copyright		Copyright 2003-2005, Fabio De Pascale
 */
 
+
 class stock_matrix extends object {
 	var $objects;
 	var $dishes;
@@ -53,7 +54,8 @@ class stock_matrix extends object {
 
 	function create_objects_vector ($var) {
 		$query = "SELECT DISTINCT `$var` as elem FROM #prefix#stock_movements";
-		$res = common_query($query,__FILE__,__LINE__);
+		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return 0;
 		
 		$i=0;
@@ -81,7 +83,8 @@ class stock_matrix extends object {
 		}
 		
 		$query = "SELECT `obj_id`,`dish_id`,`dish_quantity` FROM #prefix#stock_movements";
-		$res = common_query($query,__FILE__,__LINE__);
+		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return 0;
 	
 		while($arr = mysql_fetch_array ($res)) {
@@ -99,13 +102,16 @@ class stock_matrix extends object {
 		
 		foreach($this->objects as $key=>$row_number) {
 			$query = "SELECT `timestamp`,`quantity` FROM #prefix#stock_samples WHERE `obj_id`='".$key."' ORDER BY `timestamp` DESC LIMIT 1";
-			$res = common_query($query,__FILE__,__LINE__);
+			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
 			if(!$res) return 0;
+			
 			if($arr = mysql_fetch_array ($res)) $quantity_end = $arr['quantity'];
 			else $quantity_end = 0;
 			
 			$query = "SELECT `timestamp`,`quantity` FROM #prefix#stock_samples WHERE `obj_id`='".$key."' ORDER BY `timestamp` ASC LIMIT 1";
-			$res = common_query($query,__FILE__,__LINE__);
+			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
 			if(!$res) return 0;
 			if($arr = mysql_fetch_array ($res)) $quantity_start = $arr['quantity'];
 			else $quantity_start = 0;

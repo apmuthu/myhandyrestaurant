@@ -71,6 +71,9 @@ if(!$header_printed){
 	
 	unset($_SESSION['catprinted']);
 
+	$modManager = new modManager;
+	if(is_array($modules)) $modManager -> addModule ($modules);
+	
 	if(isset($_REQUEST['command'])) $command=$_REQUEST['command'];
 	else $command='none';
 

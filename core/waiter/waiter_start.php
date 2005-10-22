@@ -26,7 +26,6 @@
 * @package		MyHandyRestaurant
 * @copyright		Copyright 2003-2005, Fabio De Pascale
 */
-	define('ROOTDIR','..');
 	require(ROOTDIR."/conf/config.inc.php");
 	require(ROOTDIR."/conf/config.constants.inc.php");
 
@@ -82,7 +81,7 @@
 		$start_data=$_REQUEST['data'];
 	}
 
-	if($_SESSION['section']!="waiter"){
+	if(!isset($_SESSION['section']) || $_SESSION['section']!="waiter"){
 		unset_session_vars();
 		$_SESSION['section']="waiter";
 	}
@@ -108,6 +107,9 @@
 		$error_msg .= common_bottom();
 		die($error_msg);
 	}
+	
+	$modManager = new modManager;
+	if(is_array($modules)) $modManager -> addModule ($modules);
 	
 	$GLOBALS['cache_var']=new cache();
 

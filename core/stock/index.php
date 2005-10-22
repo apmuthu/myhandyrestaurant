@@ -45,6 +45,8 @@ $tpl -> assign("head", $tmp);
 
 $tpl -> set_admin_template_file ('menu');
 
+if(!class_exists($class) || !stock_object::stockEnabled()) $class="nonWorkingModule";
+
 $accepted_class=false;
 switch($class) {
 	case 'stock_object':
@@ -101,6 +103,11 @@ switch($class) {
 				if($err=$obj -> insert_ingred_quantities($start_data)) {
 					$tmp = '<span class="error_msg">Error inserting data: '.$err.'</span><br>';
 					$tpl -> append("messages", $tmp);
+				}
+				if(isset($_REQUEST['from_dish']) && $_REQUEST['from_dish']) {
+					$class='dish';
+					$command='edit';
+					$start_data['id']=$_REQUEST['from_dish'];
 				}
 				break;
 		}

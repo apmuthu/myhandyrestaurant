@@ -26,12 +26,15 @@
 * @package		MyHandyRestaurant
 * @copyright		Copyright 2003-2005, Fabio De Pascale
 */
-
 class stock_dish extends object {
 	var $form_properties;
 	function stock_dish($id=0) {
 		$this -> db = 'common';
 		$this->table=$GLOBALS['table_prefix'].'dishes';
+		
+		if(!commonTableExists($this->db,$this->table)) $this->disabled=true;
+		else $this->disabled=false;
+		
 		$this->id=$id;
 		$this->fields_names=array(	'id'=>ucphr('ID'),
 								'name'=>ucphr('NAME'),
@@ -50,16 +53,17 @@ class stock_dish extends object {
 	function list_search ($search) {
 		$query = '';
 		
-		$table = $this->table;
-		$lang_table = $table."_".$_SESSION['language'];
+		$dbCommon=$_SESSION['common_db'];
+		$table = '`'.$dbCommon.'`.`'.$this->table.'`';
+		$lang_table = '`'.$dbCommon.'`.`'.$table."_".$_SESSION['language'].'`';
 		
 		$query="SELECT
 				$table.`id`,
 				IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
 				RPAD('".ucphr('INGREDIENT_QUANTITIES')."',30,' ') as `table`,
 				".TABLE_STOCK_DISHES." as `table_id`
-				FROM `$table`
-				LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
+				FROM $table
+				LEFT JOIN $lang_table ON $lang_table.`table_id`=$table.`id`
 				WHERE $table.`deleted`='0'
 				AND ($lang_table.`table_name` LIKE '%$search%' OR $table.`name` LIKE '%$search%')
 				AND ($table.`ingreds`<>'' OR $table.`dispingreds`<>'')
@@ -70,9 +74,12 @@ class stock_dish extends object {
 	
 	function list_query_all () {
 		$table = $this->table;
-		$lang_table = $table."_".$_SESSION['language'];
-		$cat_table = "#prefix#categories";
-		$cat_lang_table = "#prefix#categories_".$_SESSION['language'];
+		
+		$dbCommon=$_SESSION['common_db'];
+		$table = '`'.$dbCommon.'`.`'.$this->table.'`';
+		$lang_table = '`'.$dbCommon.'`.`'.$this->table."_".$_SESSION['language'].'`';
+		$cat_table = '`'.$dbCommon.'`.`#prefix#categories`';
+		$cat_lang_table = '`'.$dbCommon.'`.`#prefix#categories_'.$_SESSION['language']."`";
 		
 		$query="SELECT
 				$table.`id`,
@@ -82,10 +89,10 @@ class stock_dish extends object {
 		$query .= "
 				$table.`price`,
 				IF($cat_lang_table.`table_name`='' OR $cat_lang_table.`table_name` IS NULL,$cat_table.`name`,$cat_lang_table.`table_name`) as `category`
-				FROM `$table`
-				LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
-				LEFT JOIN `$cat_table` ON $cat_table.`id`=$table.`category`
-				LEFT JOIN `$cat_lang_table` ON $cat_lang_table.`table_id`=$table.`category`
+				FROM $table
+				LEFT JOIN $lang_table ON $lang_table.`table_id`=$table.`id`
+				LEFT JOIN $cat_table ON $cat_table.`id`=$table.`category`
+				LEFT JOIN $cat_lang_table ON $cat_lang_table.`table_id`=$table.`category`
 				WHERE $table.`deleted`='0'
 				AND ($table.`ingreds`<>'' OR $table.`dispingreds`<>'')
 				";
@@ -293,6 +300,14 @@ class stock_dish extends object {
 		$avail=$this->available_quantity_array();
 		if(!is_array($avail) && $avail<0) $qty=ucphr('NO_INGREDIENT_QUANTITY_INSERTED');
 		elseif(!is_array($avail) && $avail==0) $qty=ucphr('CANNOT_PREPARE_DISH');
+		elseif(is_array($avail) && !count($avail)) {
+			$qty=ucphr('NO_INCLUDED_INGREDIENTS').' '.help_sticky('NO_INCLUDED_INGREDIENTS');
+			$display->properties[$row][$col]='style="color: #FF0000; font-weight: bolder"';
+			$display->rows[$row][$col]=$qty;
+			$col++;
+			$row++;
+			return $display->list_table();
+		}
 		elseif(is_array($avail)) {
 			asort($avail,SORT_NUMERIC);
 			foreach($avail as $ingred_id => $qty) {
@@ -390,13 +405,19 @@ class stock_dish extends object {
 		return 0;
 	}
 	
-	function edit_many ($arr) {
+	function edit_many ($arr,$input_data) {
 		if(!is_array($arr)) return '';
 		
 		$output .= '
 		<form name="edit_form_'.get_class($this).'" action="'.$this->file.'" method="post">
 		<input type="hidden" name="command" value="insert_ingred_quantities">
 		<input type="hidden" name="class" value="'.get_class($this).'">';
+		
+		if(isset($input_data['from_dish']) && $input_data['from_dish']) {
+			$output .= '
+		<input type="hidden" name="from_dish" value="'.$arr[0].'">';
+		}
+		
 		foreach ($arr as $id) {
 			$obj = new stock_dish ($id);
 			$obj->form_properties =$this->form_properties;
@@ -411,9 +432,9 @@ class stock_dish extends object {
 		return $output;
 	}
 	
-	function form () {
-		if(!$this->from_code && isset($_REQUEST['edit']) && is_array($_REQUEST['edit'])) return $this->edit_many($_REQUEST['edit']);
-		elseif (!$this->from_code && !isset($_REQUEST['edit'])) return $this->edit_many(array($this->id));
+	function form ($input_data=array()) {
+		if(!$this->from_code && isset($_REQUEST['edit']) && is_array($_REQUEST['edit'])) return $this->edit_many($_REQUEST['edit'],$input_data);
+		elseif (!$this->from_code && !isset($_REQUEST['edit'])) return $this->edit_many(array($this->id),$input_data);
 		
 		$display = new display();
 		$display->highlight=false;

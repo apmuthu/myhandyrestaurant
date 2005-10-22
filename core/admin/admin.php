@@ -122,12 +122,21 @@ switch($class) {
 		if(!access_allowed(USER_BIT_MENU)) $command='access_denied';
 		$accepted_class=true;
 		break;
+	default:
+		if($modManager -> moduleExists($class)) $accepted_class=true;
+		
+		if(!$modManager -> checkAllow($class)) $command='access_denied';
+		break;
 }
 
 if($accepted_class) {
-	$obj = new $class;
+	if($modManager->moduleExists ($class))
+	{
+		$obj =& $modManager->getModule($class);
+		// echo 'Charged object';
+	} else $obj = new $class;
+	
 	$tpl -> assign("title", $obj->title);
-	$obj = new $class;
 	$obj -> admin_page($class,$command,$start_data);
 }
 

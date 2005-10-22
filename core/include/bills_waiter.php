@@ -41,10 +41,10 @@ function bill_orders_to_print ($sourceid) {
 	return 0;
 }
 
-function write_log_item($item_id,$quantity,$price,$receipt_id) {
+function write_log_item($item_id,$quantity,$price,$transaction_id) {
 /*
 name:
-write_log_item($item_id,$quantity,$price,$receipt_id)
+write_log_item($item_id,$quantity,$price,$transaction_id)
 returns:
 0 - no error
 1 - Order record not found
@@ -56,56 +56,78 @@ other - mysql error number
 	// $log["datetime"] = date("Y-m-d H:i:s",time()); 	// human format
 	// $log["datetime"] = date("YmdHis",time()); 		// timestamp format
 
-	$query="SELECT * FROM `#prefix#orders` WHERE `id`='$item_id'";
-	$res_item=common_query($query,__FILE__,__LINE__);
-	if(!$res_item) return mysql_errno();
-
-	if(mysql_num_rows($res_item))
-		$arr_item=mysql_fetch_array($res_item);
-	else {
-		$msg='Error in '.__FUNCTION__.' - Order record not found: order id: '.$item_id.'.';
-		echo nl2br($msg)."\n";
-		error_msg(__FILE__,__LINE__,$msg);
-		return 1;
+	if($item_id==DISCOUNT_ID)
+	{
+		$log['waiter']='NotAssigned';
+		$table = new table($_SESSION['sourceid']);
+		if($table->data['userid']) $log["waiter"]=$table->data['userid'];
+	
+		$log['table']=$_SESSION['sourceid'];
+		
+		$dishid=DISCOUNT_ID;
+	} else {
+		$query="SELECT * FROM `#prefix#orders` WHERE `id`='$item_id'";
+		$res_item=common_query($query,__FILE__,__LINE__);
+		if(!$res_item) return mysql_errno();
+	
+		if(mysql_num_rows($res_item))
+			$arr_item=mysql_fetch_array($res_item);
+		else {
+			$msg='Error in '.__FUNCTION__.' - Order record not found: order id: '.$item_id.'.';
+			echo nl2br($msg)."\n";
+			error_msg(__FILE__,__LINE__,$msg);
+			return 1;
+		}
+		debug_msg(__FILE__,__LINE__,__FUNCTION__.' - id: '.$arr_item['dishid']);
+	
+		$log['waiter']='NotAssigned';
+		$table = new table($arr_item['sourceid']);
+		if($table->data['userid']) $log["waiter"]=$table->data['userid'];
+	
+		$log['table']=$_SESSION['sourceid'];
+		
+		if($arr_item==0 || $arr_item['deleted']==1)  return 0;
+		
+		if($arr_item['dishid'] == MOD_ID && $arr_item['operation']==0) return 0;
+		
+		$dishid=$arr_item['dishid'];
 	}
-	debug_msg(__FILE__,__LINE__,__FUNCTION__.' - id: '.$arr_item['dishid']);
 
-	$log['waiter']='NotAssigned';
-	$table = new table($arr_item['sourceid']);
-	if($table->data['userid']) $log["waiter"]=$table->data['userid'];
-
-	if($arr_item==0 || $arr_item['deleted']==1)  return 0;
 	
-	if($arr_item['dishid'] == MOD_ID && $arr_item['operation']==0) return 0;
-	
-	$dishid=$arr_item['dishid'];
 	$log["quantity"]=$quantity;
 	$log["price"]=$price;
-	$log["payment"]=$receipt_id;
-	if($dishid != MOD_ID) {
-		$log["dish"]=$arr_item['dishid'];
-		$log["ingredient"]="";
-		$log["operation"]=0;
-		$log["destination"]=$arr_item['dest_id'];
-		$dish = new dish ($arr_item['dishid']);
-		$log['category'] = $dish->data['category'];
-	} elseif ($dishid==MOD_ID) {
+	$log["transaction"]=$transaction_id;
+	
+	if ($dishid==MOD_ID) {
 		$ingred = new ingredient ($arr_item['ingredid']);
 		$log['category'] = $ingred->data['category'];
 		
-		$log["dish"]="";
+		$log["dish"]=MOD_ID;
 		$log["ingredient"]=$arr_item['ingredid'];
 		$log["operation"]=$arr_item['operation'];
 
 		$associated_orderid=$arr_item['associated_id'];
 		$associated_dishid=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],"orders","dishid",$associated_orderid);
 		$log["destination"]=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],"dishes","destid",$associated_dishid);
-	}elseif ($dishid==SERVICE_ID){
+	} elseif ($dishid==SERVICE_ID){
 		$log["dish"]=SERVICE_ID;
 		$log["ingredient"]="";
 		$log["operation"]=0;
 		$log["category"]=0;
 		$log["destination"]=0;
+	} elseif ($dishid==DISCOUNT_ID){
+		$log["dish"]=DISCOUNT_ID;
+		$log["ingredient"]="";
+		$log["operation"]=0;
+		$log["category"]=0;
+		$log["destination"]=0;
+	} else {
+		$log["dish"]=$arr_item['dishid'];
+		$log["ingredient"]="";
+		$log["operation"]=0;
+		$log["destination"]=$arr_item['dest_id'];
+		$dish = new dish ($arr_item['dishid']);
+		$log['category'] = $dish->data['category'];
 	}
 
 	$log_table=$GLOBALS['table_prefix']."account_log";
@@ -127,7 +149,7 @@ other - mysql error number
 	$query.=")";
 
 	// CRYPTO
-	$res = mysql_db_query ($_SESSION['account'],$query);
+	$res = mysql_db_query ($_SESSION['mgmt_db'],$query);
 	if($errno=mysql_errno()) {
 		$msg="Error in ".__FUNCTION__." - ";
 		$msg.='mysql: '.mysql_errno().' '.mysql_error()."\n";
@@ -146,8 +168,8 @@ function bill_check_keep_separated(){
 
 	if(!$keep_separated){
 		unset($_SESSION['separated']);
-		unset($_SESSION['type']);
-		unset($_SESSION['account']);
+		//unset($_SESSION['type']);
+		//unset($_SESSION['mgmt_db']);
 		unset($_SESSION['discount']);
 	}
 
@@ -169,6 +191,7 @@ function bill_check_empty(){
 }
 
 function bill_print(){
+	global $modManager;
 /*
 name:
 bill_print()
@@ -179,71 +202,54 @@ returns:
 3 - Printing error
 other - mysql error number
 */
-	// type: 	0: reserved
-	//			1: bill
-	//			2. invoice
-	//			3. receipt
-	//	we have to translate them to the mgmt_type values in order to be correctely
-	//	written and read in the log
-	//	mgmt_type:	3: invoice
-	//				4: bill
-	//				5: receipt
+	
 	global $tpl;
 	global $output_page;
 	$output['orders']='';	
 	$output_page = '';
-	
 	
 	if($_SESSION['bill_printed']) return 0;
 	$_SESSION['bill_printed']=1;
 
 	$type = $_SESSION['type'];
 	$keep_separated = bill_check_keep_separated();
-	$type = receipt_type_waiter2mgmt($type);
 
-	// CRYPTO
-	if(!bill_check_empty()) {
-		$receipt_id=receipt_insert($_SESSION['account'],$type);
-	}
-
-	$query="SELECT * FROM `#prefix#accounting_dbs` WHERE `db` = '".$_SESSION['account']."'";
+	if(bill_check_empty()) return ERR_NO_ORDER_SELECTED;
+	
+	$paymentdoc = new $type;
+	$data['internal_id'] = $paymentdoc->findLastPayment();
+	$data['table']=$_SESSION['sourceid'];
+	$paymentdoc->silent=true;
+	if($err = $paymentdoc -> insert($data)) return ERR_PAYMENTDOC_INSERT;
+	$receipt_id=$paymentdoc->id;
+	$internal_id = $data['internal_id'];
+	
+	if(CONF_PRINT_JAVAPOS_RECEIPT && isset($paymentdoc->enableJavaPOS) && $paymentdoc->enableJavaPOS) $jpos = new javapos();
+	
+	$transaction = new transaction;
+	$transaction_id = $transaction -> recordExists($type,$receipt_id);
+	
+	$query="SELECT * FROM `#prefix#accounting_dbs` WHERE `db` = '".$_SESSION['mgmt_db']."'";
 	$res=common_query($query,__FILE__,__LINE__);
 	if(!$res) return ERR_MYSQL;
 	
 	$arr=mysql_fetch_array($res);
 	$printing_enabled=$arr['print_bill'];
-
+	
 	$tpl_print = new template;
+	
+	if($modManager->moduleExists('paymentdocs_printer')) $paymentdocPrinter = new paymentdocs_printer;
+	
+	$destid = $paymentdocPrinter->getPaymentdocPrinter ($type);
 
-	switch ($_SESSION['type']) {
-		case 1:
-			$query="SELECT * FROM `#prefix#dests` WHERE `bill`='1' AND `deleted`='0'";
-			$template_type='bill';
-			break;
-		case 2:
-			$query="SELECT * FROM `#prefix#dests` WHERE `invoice`='1' AND `deleted`='0'";
-			$template_type='invoice';
-			break;
-		case 3:
-			$query="SELECT * FROM `#prefix#dests` WHERE `receipt`='1' AND `deleted`='0'";
-			$template_type='receipt';
-			break;
-		default:
-			$query="SELECT * FROM `#prefix#dests` WHERE `bill`='1' AND `deleted`='0'";
-			$template_type='bill';
-	}
-	$res=common_query($query,__FILE__,__LINE__);
-	if(!$res) return ERR_MYSQL;
-
-	$arr=mysql_fetch_array($res);
-	if ($arr['dest']!='') {
-		$destid=$arr['id'];
+	if ($destid) {
 		$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
 	} else {
-		return ERR_PRINTER_NOT_FOUND_FOR_SELECTED_TYPE;
+		if(!CONF_PRINT_JAVAPOS_RECEIPT || !isset($paymentdoc->enableJavaPOS) || !$paymentdoc->enableJavaPOS) return ERR_PRINTER_NOT_FOUND_FOR_SELECTED_TYPE;
 	}
-
-	if($err = $tpl_print->set_print_template_file($destid,$template_type)) return $err;
+	
+	$template_type=$type;
+	if($destid && $err = $tpl_print->set_print_template_file($destid,$template_type)) return $err;
 	
 	// reset the counter and the message to be sent to the printer
 	$total=0;
@@ -270,11 +276,8 @@ other - mysql error number
 		$tpl_print->assign("customer_city", $output['customer']);
 		$output['customer']=ucfirst(lang_get($dest_language,'VAT_ACCOUNT')).": ".$cust -> data ['vat_account'];
 		$tpl_print->assign("customer_vat_account", $output['customer']);
-	}
+	} else $cust_id=0;
 	
-	if(bill_check_empty()) {
-		return ERR_NO_ORDER_SELECTED;
-	}
 
 	$output_page .= "<table bgcolor=\"".COLOR_TABLE_GENERAL."\">
 	<thead>
@@ -292,35 +295,45 @@ other - mysql error number
 
 	// the next for prints the list and the chosen dishes
 	for (reset ($_SESSION['separated']); list ($key, $value) = each ($_SESSION['separated']); ) {
+		$item=billItemData ($key,$value,$destid);
+		if(CONF_PRINT_JAVAPOS_RECEIPT && isset($paymentdoc->enableJavaPOS) && $paymentdoc->enableJavaPOS && is_array($item)) $jpos->addItem($item);
+		
 		$output['orders'] .= bill_print_row($key,$value,$destid);
 	}
 	$tpl_print -> assign("orders", $output['orders']);
 
 	if($_SESSION['discount']['type']=="amount"
 	|| $_SESSION['discount']['type']=="percent") {
-		$output['discount']=bill_print_discount($receipt_id,$destid);
+		$output['discount']=bill_print_discount($transaction_id,$destid);
 		$tpl_print->assign("discount", $output['discount']);
 	}
 
 	$total = bill_calc_vat();
 	$total_discounted = bill_calc_discount($total);
-	// updates the receipt value, has to be before print totals!
-	receipt_update_amounts($_SESSION['account'],$total_discounted,$receipt_id);
 	
-	$output['total'] = bill_print_total($receipt_id,$destid);
+	/*
+	if($total_discounted["total"] < 0) {
+		apply_discount_amount($_SESSION['sourceid'],$total["total"]);
+		$total_discounted = bill_calc_discount($total);
+	}
+	*/
+	
+	$discountAmount = $total["total"]-$total_discounted["total"];
+		
+	$output['total'] = bill_print_total($total_discounted['total'],$destid);
 	$tpl_print -> assign("total", $output['total']);
 
 	$output_page .= "
 	</tbody>
 	</table>";
 
-	$output['receipt_id'] = bill_print_receipt_id ($receipt_id,$destid);
+	$output['receipt_id'] = bill_print_receipt_id ($internal_id,$destid,$paymentdoc->label);
 	$tpl_print -> assign ("receipt_id", $output['receipt_id']);
 	
-	$output['taxes'] = bill_print_taxes ($receipt_id,$destid);
+	$output['taxes'] = bill_print_taxes ($total_discounted['taxable'],$total_discounted['tax'],$destid);
 	$tpl_print -> assign("taxes", $output['taxes']);
 	
-	if($err = $tpl_print -> parse ()) {
+	if($destid && $err = $tpl_print -> parse ()) {
 		$msg="Error in ".__FUNCTION__." - ";
 		$msg.='error: '.$err."\n";
 		error_msg (__FILE__,__LINE__,$msg);
@@ -332,30 +345,52 @@ other - mysql error number
 	$msg = $tpl_print -> getOutput ();
 	
 	$msg = str_replace ("'", "", $msg);
-
+	
+	$ticketAmount=0;
+	
 	if($printing_enabled) {
-		if($err = print_line($arr['id'],$msg)) {
+		//only prints receipts to JavaPOS
+		if(CONF_PRINT_JAVAPOS_RECEIPT && isset($paymentdoc->enableJavaPOS) && $paymentdoc->enableJavaPOS) $jpos->printReceipt(0, 0, $discountAmount, $ticketAmount, $cust_id);
+		
+		$debug = __FUNCTION__.' - Printing to destid '.$destid.' - message '.$msg.' '."\n"; 
+		debug_msg(__FILE__,__LINE__,$debug);
+		
+		if($destid && $err = print_line($destid,$msg,DO_NOT_SAVE_TO_LOG)) {
 			// the process is stopped so we delete the created receipt
-			receipt_delete($_SESSION['account'],$receipt_id);
+			//receipt_delete($_SESSION['mgmt_db'],$receipt_id);
 			return $err;
 		}
+		
+		$paymentdoc = new $type($receipt_id);
+		$paymentdoc->silent=true;
+		$data['internal_id'] = $internal_id;
+		$data['id'] = $paymentdoc->id;
+		$data['customer'] = $cust_id;
+		$data['amount'] = $total_discounted['total'];
+		$data['discount'] = $discountAmount;
+		$data['transaction'] = $transaction_id;
+		$data['vat'] = $total_discounted['tax'];
+		$data['text'] = $msg;
+		$data['table']=$_SESSION['sourceid'];
+		//echo 'writing data to receipt: '.var_dump_table($data);
+		if($err = $paymentdoc -> update($data)) return ERR_PAYMENTDOC_INSERT;
 	}
 
 	ksort($_SESSION['separated']);
 
 	// sets the log
 	for (reset ($_SESSION['separated']); list ($key, $value) = each ($_SESSION['separated']); ) {
-		if($err_logger=bill_logger($key,$receipt_id)){
-			debug_msg(__FILE__,__LINE__,__FUNCTION__.' - receipt_id: '.$receipt_id.' - logger return code: '.$err_logger);
+		if($err_logger=bill_logger($key,$transaction_id)){
+			debug_msg(__FILE__,__LINE__,__FUNCTION__.' - $transaction_id: '.$transaction_id.' - logger return code: '.$err_logger);
 		} else {
-			debug_msg(__FILE__,__LINE__,__FUNCTION__.' - receipt_id: '.$receipt_id.' - logged');
+			debug_msg(__FILE__,__LINE__,__FUNCTION__.' - $transaction_id: '.$transaction_id.' - logged');
 		}
 	}
 	
 	return 0;
 }
 
-function bill_logger($item_id,$receipt_id){
+function bill_logger($item_id,$transaction_id){
 	$topay=$_SESSION['separated'][$item_id]['topay'];
 	if(!$topay) return 1;
 
@@ -376,7 +411,7 @@ function bill_logger($item_id,$receipt_id){
 	$resupd=common_query($query,__FILE__,__LINE__);
 	if(!$resupd) return mysql_errno();
 	
-	if($log_error=write_log_item($orderid,$topay,$price,$receipt_id)) {
+	if($log_error=write_log_item($orderid,$topay,$price,$transaction_id)) {
 		$msg = 'Error in '.__FUNCTION__.' - ';
 		$msg .= 'Logging Error: '.$log_error;
 		echo nl2br($msg)."\n";
@@ -395,7 +430,7 @@ function bill_logger($item_id,$receipt_id){
 		$resupd=common_query($query,__FILE__,__LINE__);
 		if(!$resupd) return mysql_errno();
 		
-		if($log_error=write_log_item($arr['id'],$topay,$price,$receipt_id)) {
+		if($log_error=write_log_item($arr['id'],$topay,$price,$transaction_id)) {
 			$msg = 'Error in '.__FUNCTION__.' - ';
 			$msg .= 'Logging Error: '.$log_error;
 			echo nl2br($msg)."\n";
@@ -437,6 +472,54 @@ function bill_order_get_modifications($orderid,$lang='') {
 	return $mods;
 }
 
+function billItemData ($key,$value,$destid){
+	$item=array();
+
+	$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
+	$dishobj = new dish ($_SESSION['separated'][$key]['dishid']);
+	$name = $dishobj -> name ($dest_language);
+	$mods=bill_order_get_modifications($key,$dest_language);
+
+	$cat = new category($dishobj->get("category"));
+	$vatClass = $cat->get("vat_rate");
+	
+	if($_SESSION['separated'][$key]['dishid']==SERVICE_ID) {
+		$name=ucfirst(lang_get($dest_language,'SERVICE_FEE'));
+		
+		$query="SELECT * FROM `#prefix#vat_rates`
+			WHERE `service_fee`='1' ORDER BY `id` ASC";
+		$res = common_query($query,__FILE__,__LINE__);
+		if(!$res) return ERR_MYSQL;
+	
+		if($arr=mysql_fetch_array($res)) $vatClass=$arr['id'];
+		else $vatClass=0;
+	}
+
+	if(!$_SESSION['separated'][$key]['special'] && $_SESSION['separated'][$key]['topay']){
+
+		$item['unitPrice']=$_SESSION['separated'][$key]['finalprice']/$_SESSION['separated'][$key]['topay'];
+		$item['description']=$name;
+		$item['quantity']=$_SESSION['separated'][$key]['topay'];
+		// vatClass not yet implemented
+		$item['vatClass']=$vatClass;
+		
+		/*
+		if($mods) {
+			$msg.=" \t";
+			for (reset ($mods); list ($key2, $value2) = each ($mods); ) {
+				$msg.=$value2;
+				$msgmods.=$value2;
+			}
+			$msg.="\n";
+		}
+		*/
+	}
+	if(empty($item['description'])) return 0;
+	
+	return $item;
+
+}
+
 function bill_print_row ($key,$value,$destid){
 	global $output_page;
 	$msg='';
@@ -444,6 +527,7 @@ function bill_print_row ($key,$value,$destid){
 	$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
 	$dishobj = new dish ($_SESSION['separated'][$key]['dishid']);
 	$name = $dishobj -> name ($dest_language);
+	
 	$mods=bill_order_get_modifications($key,$dest_language);
 
 	if($_SESSION['separated'][$key]['dishid']==SERVICE_ID) {
@@ -501,7 +585,7 @@ function bill_print_row ($key,$value,$destid){
 	return $msg;
 }
 
-function bill_print_discount($receipt_id,$destid) {
+function bill_print_discount($transaction_id,$destid) {
 	global $output_page;
 
 	$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
@@ -532,7 +616,7 @@ function bill_print_discount($receipt_id,$destid) {
 
 	if(!$discount_number) return $msg;
 
-	$err = write_log_discount($discount_value,$receipt_id);
+	$err = write_log_discount($discount_value,$transaction_id);
 	$err = discount_save_to_source($discount_value);
 
 	$msg.="\t".ucfirst(lang_get($dest_language,'PRINTS_DISCOUNT'))." ".$discount_label;
@@ -558,7 +642,18 @@ function bill_calc_vat() {
 			$dishid=$_SESSION['separated'][$key]['dishid'];
 			$price=$_SESSION['separated'][$key]['finalprice'];
 			$dish_cat=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dishes',"category",$dishid);
-			$vat_rate_id=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'categories',"vat_rate",$dish_cat);
+			if($_SESSION['separated'][$key]['dishid']==SERVICE_ID)
+			{
+				$query="SELECT * FROM `#prefix#vat_rates`
+					WHERE `service_fee`='1' ORDER BY `id` ASC";
+				$res = common_query($query,__FILE__,__LINE__);
+				if(!$res) return ERR_MYSQL;
+			
+				if($arr=mysql_fetch_array($res)) $vat_rate_id=$arr['id'];
+				else $vat_rate_id=0;
+			} else {
+				$vat_rate_id=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'categories',"vat_rate",$dish_cat);
+			}
 			$vat_rate=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'vat_rates',"rate",$vat_rate_id);
 			$taxable=$price/($vat_rate+1);
 			$tax=$taxable*$vat_rate;
@@ -657,7 +752,7 @@ function bill_calc_discount($total) {
 	return $total;
 }
 
-function bill_print_total($receipt_id,$destid) {
+function bill_print_total($total_discounted,$destid) {
 	global $output_page;
 	
 	$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
@@ -665,20 +760,6 @@ function bill_print_total($receipt_id,$destid) {
 	$msg="";
 	$class=COLOR_ORDER_PRINTED;
 
-	$table=$GLOBALS['table_prefix'].'account_mgmt_main';
-	$query="SELECT * FROM $table WHERE `id`='$receipt_id'";
-	$res=mysql_db_query($_SESSION['account'],$query);
-	if($errno=mysql_errno()) {
-		$msg="Error in ".__FUNCTION__." - ";
-		$msg.='mysql: '.mysql_errno().' '.mysql_error()."\n";
-		$msg.='query: '.$query."\n";
-		echo nl2br($msg)."\n";
-		error_msg(__FILE__,__LINE__,$msg);
-		return '';
-	}
-	$arr=mysql_fetch_array($res);
-	$total_discounted=$arr['cash_amount'];
-	
 	$output_page .= '<tr>
 	<td></td>
 	<td>'.ucfirst(phr('TOTAL')).'</td>
@@ -690,26 +771,10 @@ function bill_print_total($receipt_id,$destid) {
 	return $msg;
 }
 
-function bill_print_taxes($receipt_id,$destid) {
+function bill_print_taxes($taxable, $vat_total ,$destid) {
 	$msg="";
 	
 	$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
-
-	$table=$GLOBALS['table_prefix'].'account_mgmt_main';
-	$query="SELECT * FROM $table WHERE `id`='$receipt_id'";
-	$res=mysql_db_query($_SESSION['account'],$query);
-	if($errno=mysql_errno()) {
-		$msg="Error in ".__FUNCTION__." - ";
-		$msg.='mysql: '.mysql_errno().' '.mysql_error()."\n";
-		$msg.='query: '.$query."\n";
-		echo nl2br($msg)."\n";
-		error_msg(__FILE__,__LINE__,$msg);
-		return $errno;
-	}
-	
-	$arr=mysql_fetch_array($res);
-	$taxable=$arr['cash_taxable_amount'];
-	$vat_total=$arr['cash_vat_amount'];
 
 	$msg.="\t\t".ucfirst(lang_get($dest_language,'PRINTS_TAXABLE'))." \t".country_conf_currency()." $taxable";
 	
@@ -725,34 +790,12 @@ function bill_print_taxes($receipt_id,$destid) {
 	return $msg;
 }
 
-function bill_print_receipt_id($receipt_id,$destid) {
+function bill_print_receipt_id($internal_id,$destid,$label) {
 	$msg="";
 	
 	$dest_language=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests',"language",$destid);
 
-	$table=$GLOBALS['table_prefix'].'account_mgmt_main';
-	$query="SELECT * FROM $table WHERE `id`='$receipt_id'";
-	$res=mysql_db_query($_SESSION['account'],$query);
-	if($errno=mysql_errno()) {
-		$msg="Error in ".__FUNCTION__." - ";
-		$msg.='mysql: '.mysql_errno().' '.mysql_error()."\n";
-		$msg.='query: '.$query."\n";
-		echo nl2br($msg)."\n";
-		error_msg(__FILE__,__LINE__,$msg);
-		return '';
-	}
-	
-	$arr=mysql_fetch_array($res);
-	$internal_id=$arr['internal_id'];
-	$type=$arr['type'];
-
-	if($type==3){
-		$msg.=ucfirst(lang_get($dest_language,'PRINTS_INVOICE'))." ".ucfirst(lang_get($dest_language,'PRINTS_NUMBER_ABBR')).": $internal_id";
-	} elseif($type==4) {
-		$msg.=ucfirst(lang_get($dest_language,'PRINTS_BILL'))." ".ucfirst(lang_get($dest_language,'PRINTS_NUMBER_ABBR')).": $internal_id";
-	} elseif($type==5) {
-		$msg.=ucfirst(lang_get($dest_language,'PRINTS_RECEIPT'))." ".ucfirst(lang_get($dest_language,'PRINTS_NUMBER_ABBR')).": $internal_id";
-	}
+	$msg.=ucfirst($label)." ".ucfirst(lang_get($dest_language,'PRINTS_NUMBER_ABBR')).": $internal_id";
 	
 	return $msg;
 }
@@ -818,6 +861,12 @@ other - mysql error number
 	$_SESSION['bill_printed']=0;
 	if(order_found_generic_not_priced($_SESSION['sourceid'])) return ERR_GENERIC_ORDER_NOT_PRICED_FOUND;
 
+	$user = new user($_SESSION['userid']);
+	if ($user->level[USER_BIT_CASHIER] && table_is_closed($_SESSION['sourceid'])) {
+		$tmp = '<a href="orders.php?command=reopen_confirm">'.ucfirst(phr('REOPEN_TABLE')).'</a><br/>';
+		$tpl -> append ('commands',$tmp);
+	}
+		
 	$keep_separated = bill_check_keep_separated();
 
 	if($err=bill_clear_prices($_SESSION['sourceid'])) return $err;
@@ -828,12 +877,15 @@ other - mysql error number
 	$tmp = bill_type_selection($_SESSION['sourceid']);
 	$tpl -> assign ('type',$tmp);
 	
-	$tmp = discount_form_javascript($_SESSION['sourceid']);
-	$tpl -> assign ('discount',$tmp);
-	
 	$tmp = bill_show_list();
 	$tpl -> assign ('orders',$tmp);
 
+	if(bill_total())
+	{
+		$tmp = discount_form_javascript($_SESSION['sourceid']);
+		$tpl -> assign ('discount',$tmp);
+	}
+	
 	return 0;
 }
 
@@ -935,7 +987,7 @@ function bill_show_list(){
 		';
 	}
 
-	$output .= bill_total();
+	$output .= bill_total_page_row();
 
 	$output .= '
 	</table>';
@@ -1006,13 +1058,237 @@ function bill_account_set($account){
 		$account='';
 	}
 
-	$account=common_find_first_db($account);
-
-	$_SESSION['account']=$account;
+	$account=commonFindFirstAccountingDB($account);
+	$_SESSION['mgmt_db']=$account;
 	return 0;
 }
 
 function bill_type_selection($sourceid){
+	global $modManager;
+	
+	if(isset($_SESSION['type'])){
+		$type=$_SESSION['type'];
+	}
+	
+	if(isset($_SESSION['mgmt_db'])){
+		$account=$_SESSION['mgmt_db'];
+	} else {
+		$account=commonFindFirstAccountingDB();
+		$_SESSION['mgmt_db']=$account;
+	}
+
+	// Next is a micro-form to set a discount in percent value
+	$output = '
+	<form action="orders.php" NAME="form_type" method=post>
+	<input type="hidden" name="command" VALUE="bill_print">
+	<INPUT TYPE="HIDDEN" NAME="keep_separated" VALUE="1">
+	<div align="center">
+	'.ucfirst(phr('ACCOUNT')).': 
+	';
+	
+	$onClick =  " onclick=\"JavaScript:document.form_type.command.value='bill_set_type'; document.form_type.submit(); return false;\"";
+
+	$query="SELECT * FROM `#prefix#accounting_dbs`";
+	$res=common_query($query,__FILE__,__LINE__);
+	if(!$res) return '';
+	
+	$i=0;
+	while($arr=mysql_fetch_array($res)) {
+		$onClick2 =  " onclick=\"JavaScript:document.form_type.command.value='bill_set_type'; document.form_type.elements['account'][$i].checked=true; document.form_type.submit(); return false;\"";
+		
+		$checked="";
+		if(mysql_list_tables($arr['db'])) {
+			if($account==$arr['db']) $checked=" checked";
+			
+			$output .= '<input type="radio" name="account" value="'.$arr['db'].'"'.$checked.$onClick.'><a href="#"'.$onClick2.'>'.$arr['name'].'</a>'."\n";
+		}
+		$i++;
+	}
+
+	if($modManager->moduleExists('paymentdoc'))
+	{
+		$output .= '
+	<table>
+	<tr>
+	<td rowspan="3">'.ucfirst(phr('TYPE')).':</td>';
+	
+		$paymentdocs= new paymentdoc;
+		$docs=$paymentdocs->getPaymentdocs();
+		
+		$i=0;
+		foreach($docs as $class)
+		{
+			if($i) $output .= '<tr>';
+			
+			if(!isset($_SESSION['type']) && $i==0) $checked=' checked="true"';
+			elseif(isset($_SESSION['type']) && empty($_SESSION['type']) && $i==0) $checked=' checked="true"';
+			elseif($_SESSION['type']==$class) $checked=' checked="true"';
+			else $checked='';
+			
+			$onClick2 =  " onclick=\"JavaScript:document.form_type.command.value='bill_set_type'; document.form_type.elements['type'][$i].checked=true; document.form_type.submit(); return false;\"";
+
+			$obj = new $class;
+			$output .= '
+		<td><input type="radio" name="type" value="'.$class.'" '.$checked.$onClick.'><a href="#"'.$onClick2.'>'.ucfirst($obj->label).'</a></td></tr>';
+			$i++;
+		}
+		$output .= '
+	</table>
+	</div>
+	</form>
+	';
+	}
+	
+	$table = new table ($_SESSION['sourceid']);
+	$table->fetch_data(true);
+	if($cust_id=$table->data['customer']) {
+		$cust = new customer ($cust_id);
+		$tmp = ucphr('CUSTOMER').': '.$cust->data['surname'];
+		$tmp .= ' <a href="orders.php?command=customer_search">'.ucphr('EDIT').'</a>/';
+		$tmp .= '<a href="orders.php?command=set_customer&amp;data[customer]=0">'.ucphr('REMOVE').'</a>';
+		$tmp .= '<br/>';
+	} else {
+		$tmp = '<a href="orders.php?command=customer_search">'.ucfirst(phr('INSERT_CUSTOMER_DATA')).'</a><br/>';
+	}
+	$output .= $tmp;
+	
+	return $output;
+}
+
+function bill_type_set($type) {
+/*
+	if(empty($type)) {
+		$type=1;
+	}
+*/
+	$_SESSION['type']=$type;
+	return 0;
+}
+
+function bill_total_page_row(){
+	$output = '';
+	$total = 0;
+	$class = COLOR_TABLE_TOTAL;
+
+	for (reset ($_SESSION['separated']); list ($key, $value) = each ($_SESSION['separated']); ) {
+		$total+=$_SESSION['separated'][$key]['finalprice'];
+	}
+	$output .= '
+		<tr bgcolor='.$class.'>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'>'.ucfirst(phr('TOTAL')).'</td>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'>'.sprintf("%0.2f",$total).'</td>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'></td>
+		</tr>
+		';
+
+	if(!isset($_SESSION['discount']) || !isset($_SESSION['discount']['type']) || empty($_SESSION['discount']['type'])) return $output;
+	
+	if($_SESSION['discount']['type']=="amount") {
+		$total_discounted=$total+$_SESSION['discount']['amount'];
+		$discount_label="";
+		$discount_number=-$_SESSION['discount']['amount'];
+	} elseif($_SESSION['discount']['type']=="percent") {
+		$total_discounted=$total-$total/100*$_SESSION['discount']['percent'];
+		$discount_label=$_SESSION['discount']['percent'].' %';
+		$discount_number=$total/100*$_SESSION['discount']['percent'];
+	}
+
+	$output .= '
+		<tr bgcolor='.$class.'>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'>&nbsp;'.ucphr('DISCOUNT').' '.$discount_label.'</td>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'>-'.sprintf("%0.2f",$discount_number).'</td>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'></td>
+		</tr>
+		<tr bgcolor='.$class.'>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'>'.ucphr('TOTAL').'</td>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'>'.sprintf("%0.2f",$total_discounted).'</td>
+		<td bgcolor='.$class.'></td>
+		<td bgcolor='.$class.'></td>
+		</tr>
+		';
+	return $output;
+}
+
+function bill_total () {
+	$total = 0;
+	for (reset ($_SESSION['separated']); list ($key, $value) = each ($_SESSION['separated']); ) {
+		$total+=$_SESSION['separated'][$key]['finalprice'];
+	}
+	return $total;
+	
+	if($_SESSION['discount']['type']=="amount") {
+		$total_discounted=$total+$_SESSION['discount']['amount'];
+		$discount_label="";
+		$discount_number=-$_SESSION['discount']['amount'];
+	} elseif($_SESSION['discount']['type']=="percent") {
+		$total_discounted=$total-$total/100*$_SESSION['discount']['percent'];
+		$discount_label=$_SESSION['discount']['percent'].' %';
+		$discount_number=$total/100*$_SESSION['discount']['percent'];
+	}
+}
+
+function bill_total_discounted (){
+	$total = bill_total();
+	
+	if($_SESSION['discount']['type']=="amount") {
+		$total_discounted=$total+$_SESSION['discount']['amount'];
+	} elseif($_SESSION['discount']['type']=="percent") {
+		$total_discounted=$total-$total/100*$_SESSION['discount']['percent'];
+	}
+	return $total_discounted;
+
+}
+
+function bill_reset_confirm() {
+	global $tpl;
+
+	$tpl -> set_waiter_template_file ('question');
+
+	$tmp = navbar_form('form1','orders.php?command=printing_choose');
+	$tpl -> assign ('navbar',$tmp);
+	
+	$tmp = ucfirst(phr('RESET_SEPARATED_EXPLAIN')).'
+		<br>
+		<br><br>
+
+	<FORM ACTION="orders.php" METHOD=POST name="form1">
+	<INPUT TYPE="HIDDEN" NAME="command" VALUE="bill_reset">
+	<INPUT TYPE="checkbox" name="reset" value="1">
+	'.ucfirst(phr('RESET_SEPARATED')).'<br><br>
+	</FORM>
+	';
+	$tpl -> assign ('question',$tmp);
+	return 0;
+}
+
+function bill_reset($sourceid) {
+	$query= "UPDATE `#prefix#orders` SET `paid` = '0' WHERE `sourceid` = '$sourceid'";
+	$res=common_query($query,__FILE__,__LINE__);
+	if(!$res) return mysql_errno();
+
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+function bill_type_selection_old($sourceid){
 	/*
 	sets the bill/invoice type in waiter's session environment
 	types:
@@ -1031,11 +1307,11 @@ function bill_type_selection($sourceid){
 		}
 		$_SESSION['type']=$type;
 	}
-	if(isset($_SESSION['account'])){
-		$account=$_SESSION['account'];
+	if(isset($_SESSION['mgmt_db'])){
+		$account=$_SESSION['mgmt_db'];
 	} else {
-		$account=common_find_first_db();
-		$_SESSION['account']=$account;
+		$account=commonFindFirstAccountingDB();
+		$_SESSION['mgmt_db']=$account;
 	}
 
 	// Next is a micro-form to set a discount in percent value
@@ -1090,94 +1366,5 @@ function bill_type_selection($sourceid){
 	return $output;
 }
 
-function bill_type_set($type){
-	if(empty($type)) {
-		$type=1;
-	}
-	$_SESSION['type']=$type;
-	return 0;
-}
-
-function bill_total(){
-	$output = '';
-	$total = 0;
-	$class = COLOR_TABLE_TOTAL;
-
-	for (reset ($_SESSION['separated']); list ($key, $value) = each ($_SESSION['separated']); ) {
-		$total+=$_SESSION['separated'][$key]['finalprice'];
-	}
-	$output .= '
-		<tr bgcolor='.$class.'>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'>'.ucfirst(phr('TOTAL')).'</td>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'>'.sprintf("%0.2f",$total).'</td>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'></td>
-		</tr>
-		';
-
-	if(!isset($_SESSION['discount']) || !isset($_SESSION['discount']['type']) || empty($_SESSION['discount']['type'])) return $output;
-	
-	if($_SESSION['discount']['type']=="amount") {
-		$total_discounted=$total+$_SESSION['discount']['amount'];
-		$discount_label="";
-		$discount_number=-$_SESSION['discount']['amount'];
-	} elseif($_SESSION['discount']['type']=="percent") {
-		$total_discounted=$total-$total/100*$_SESSION['discount']['percent'];
-		$discount_label=$_SESSION['discount']['percent'].' %';
-		$discount_number=$total/100*$_SESSION['discount']['percent'];
-	}
-
-	$output .= '
-		<tr bgcolor='.$class.'>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'>&nbsp;'.ucphr('DISCOUNT').' '.$discount_label.'</td>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'>-'.sprintf("%0.2f",$discount_number).'</td>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'></td>
-		</tr>
-		<tr bgcolor='.$class.'>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'>'.ucphr('TOTAL').'</td>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'>'.sprintf("%0.2f",$total_discounted).'</td>
-		<td bgcolor='.$class.'></td>
-		<td bgcolor='.$class.'></td>
-		</tr>
-		';
-	return $output;
-}
-
-function bill_reset_confirm() {
-	global $tpl;
-
-	$tpl -> set_waiter_template_file ('question');
-
-	$tmp = navbar_form('form1','orders.php?command=printing_choose');
-	$tpl -> assign ('navbar',$tmp);
-	
-	$tmp = ucfirst(phr('RESET_SEPARATED_EXPLAIN')).'
-		<br>
-		<br><br>
-
-	<FORM ACTION="orders.php" METHOD=POST name="form1">
-	<INPUT TYPE="HIDDEN" NAME="command" VALUE="bill_reset">
-	<INPUT TYPE="checkbox" name="reset" value="1">
-	'.ucfirst(phr('RESET_SEPARATED')).'<br><br>
-	</FORM>
-	';
-	$tpl -> assign ('question',$tmp);
-	return 0;
-}
-
-function bill_reset($sourceid) {
-	$query= "UPDATE `#prefix#orders` SET `paid` = '0' WHERE `sourceid` = '$sourceid'";
-	$res=common_query($query,__FILE__,__LINE__);
-	if(!$res) return mysql_errno();
-
-	return 0;
-}
 
 ?>

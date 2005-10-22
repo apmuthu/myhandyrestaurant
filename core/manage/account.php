@@ -43,8 +43,8 @@ if(!access_allowed(USER_BIT_ACCOUNTING)) $command='access_denied';
 
 switch($command) {
 	case 'access_denied':
-				echo access_denied_admin();
-				break;
+		echo access_denied_admin();
+		break;
 	case "movement_new":
 		account_movement_form();
 		break;

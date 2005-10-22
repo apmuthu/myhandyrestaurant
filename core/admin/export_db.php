@@ -32,7 +32,7 @@ $inizio=microtime();
 session_start();
 define('ROOTDIR','..');
 require_once(ROOTDIR."/includes.php");
-require(ROOTDIR."/admin_start.php");
+require(ROOTDIR."/admin/admin_start.php");
 
 $tmp = head_line('Administration section');
 $tpl -> assign("head", $tmp);

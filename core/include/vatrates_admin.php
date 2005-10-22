@@ -36,9 +36,16 @@ class vat_rate extends object {
 		$this->file=ROOTDIR.'/admin/admin.php';
 		$this -> fields_names = array(	'id'=>ucphr('ID'),
 									'name'=>ucphr('NAME'),
+									'service_fee'=>ucphr('SERVICE_FEE'),
 									'rate'=>ucphr('VALUE'));
-		$this->fields_width=array(	'name'=>'95%',
-								'rate'=>'5%');
+		$this->fields_width=array(
+						'name'=>'95%',
+						'service_fee'=>'95%',
+						'rate'=>'5%');
+		
+		$this->allow_single_update = array ('service_fee');
+		$this->fields_boolean=array('service_fee');
+
 		$this -> fetch_data();
 	}
 
@@ -51,7 +58,7 @@ class vat_rate extends object {
 				$table.`id`,
 				$table.`name`,
 				RPAD('".ucphr('VAT_RATES')."',30,' ') as `table`,
-				".TABLE_VAT_RATES." as `table_id`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
 				WHERE $table.`name` LIKE '%$search%'
 				";
@@ -110,6 +117,8 @@ class vat_rate extends object {
 			$msg=ucfirst(phr('CHECK_VAT_RATE'));
 		}
 		
+		if(!$input_data['service_fee'])
+			$input_data['service_fee']=0;
 		
 		if($msg){
 			echo "<script language=\"javascript\">
@@ -177,6 +186,13 @@ class vat_rate extends object {
 			</td>
 			<td>
 			<input type="text" name="data[rate]" value="'.$arr['rate'].'">
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2">
+			<input type="checkbox" name="data[service_fee]" value="1"';
+			if($arr['service_fee']) $output .= ' checked';
+			$output .= '>'.ucphr('SERVICE_FEE').'
 			</td>
 		</tr>
 		<tr>

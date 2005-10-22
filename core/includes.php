@@ -46,6 +46,8 @@ include_once(ROOTDIR."/xtemplate/xtpl.php");
 include_once(ROOTDIR."/include/ezpdf_class.php");
 include_once(ROOTDIR."/include/ezpdf_class_pdf.php");
 
+include_once(ROOTDIR."/phpdocwriter/include.php");
+
 //define('CONF_USE_CACHED_INCLUDE',true);
 
 // includes all the files in include dir
@@ -77,24 +79,22 @@ if ($handle = opendir($dir_scan)) {
 }
 
 /* Modules scanning */
-/*
-$dir_scan=ROOTDIR;
+$dir_scan=ROOTDIR.'/modules';
 if ($handle = opendir($dir_scan)) {
 	// loops into modules directory
 	while (false !== ($file = readdir($handle))) {
-		
-		$dir2=$dir_scan.'/'.$file.'/include';
-		if (is_dir($dir2) && is_readable($dir2) && $file!='..' && $file!='.' && $handle = opendir($dir2)) {
-			while (false !== ($file2 = readdir($handle))) {
+		$dir2=$dir_scan.'/'.$file;
+		if (is_dir($dir2) && is_readable($dir2) && $file!='..' && $file!='.' && $handle2 = opendir($dir2)) {
+			while (false !== ($file2 = readdir($handle2))) {
 				if (is_file($dir2.'/'.$file2) && is_readable($dir2.'/'.$file2) && strtolower(substr($file2,-4))=='.php') {
 					include_once ($dir2.'/'.$file2);
 				}
 			}
+			closedir($handle2);
 		}
 	}
 	closedir($handle);
 }
-*/
 
 // includes all the printer drivers
 $dir_scan=ROOTDIR.'/drivers';

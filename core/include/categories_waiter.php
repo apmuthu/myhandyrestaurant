@@ -56,12 +56,24 @@ function categories_orders_present ($sourceid,$category) {
 	return mysql_num_rows($res);
 }
 
-function categories_list($data=''){
+function categories_list ($data=''){
 	$output = '
 <table bgcolor="'.COLOR_TABLE_GENERAL.'">
 ';
 
-	$query="SELECT * FROM `#prefix#categories` WHERE `deleted`='0' ORDER BY id ASC";
+	$table = "#prefix#categories";
+	$lang_table = "#prefix#categories_".$_SESSION['language'];
+	
+	$query="SELECT
+		$table.`id`,
+		IF($lang_table.`table_name`='' OR $lang_table.`table_name` IS NULL,$table.`name`,$lang_table.`table_name`) as `name`,
+		$table.htmlcolor
+		FROM `$table`
+		LEFT JOIN `$lang_table` ON $lang_table.`table_id`=$table.`id`
+		WHERE $table.`deleted`='0'
+		ORDER BY $table.id ASC
+		";
+	
 	$res=common_query($query,__FILE__,__LINE__);
 	if(!$res) return '';
 	
@@ -69,11 +81,11 @@ function categories_list($data=''){
 	while ($arr = mysql_fetch_array ($res)) {
 		$i++;
 		$catid=$arr['id'];
-		$cat = new category ($catid);
-		$name=ucfirst($cat->name($_SESSION['language']));
+		$name=ucfirst($arr['name']);
 		
 		$backcommand="order_create1";
-		$bgcolor=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'categories','htmlcolor',$catid);
+		$bgcolor=$arr['htmlcolor'];
+		
 		$link = 'orders.php?command=dish_list&amp;data[category]='.$catid;
 		if(isset($data['quantity']) && $data['quantity']) $link .= '&amp;data[quantity]='.$data['quantity'];
 		if(isset($data['priority']) && $data['priority']) $link .= '&amp;data[priority]='.$data['priority'];
@@ -94,13 +106,6 @@ function categories_list($data=''){
 			$output .= '
 	</tr>';
 		}
-		
-		/*
-		$output .= '
-		<td>
-		&nbsp;
-		</td>';
-		*/
 	}
 	$output .= '
 	</tbody>

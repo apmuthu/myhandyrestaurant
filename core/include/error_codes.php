@@ -71,6 +71,7 @@ define('ERR_USER_NOT_FOUND',600);
 define('ERR_WRONG_PASSWORD',601);
 define('ERR_NO_USER_PROVIDED',602);
 define('ERR_NO_PASSWORD',603);
+define('ERR_NOT_ALLOWED',604);
 
 // stock
 define('ERR_NAME_IS_BLANK',700);
@@ -82,10 +83,20 @@ define('ERR_OBJECT_ALREADY_EXISTS',703);
 define('ERR_SQL_UPGRADE_VARIABLE_NOT_AVAILABLE',800);
 define('ERR_SQL_CONTINUING',801);
 
+//objects
+define('ERR_OBJECT_DOES_NOT_EXIST',900);
+define('ERR_NO_ID_PROVIDED_TO_FUNCTION',901);
+
 // other
 define('ERR_MYSQL',1000);
 define('ERR_ACCESS_DENIED',1001);
 define('ERR_UNKNOWN',1002);
 define('ERR_UNEXPECTED_VERSION_NUMBER',1003);
+
+// messages
+define('ERR_WRONG_MSG_OBJECT',1100);
+
+// payments
+define('ERR_PAYMENTDOC_INSERT',1200);
 
 ?>

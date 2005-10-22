@@ -33,8 +33,12 @@ class stock_object extends object {
 	var $tmp;
 	
 	function stock_object ($id=0) {
-		$this -> db = 'common';
+		$this -> db = get_conf(__FILE__,__LINE__,'stockDB');
 		$this->table=$GLOBALS['table_prefix'].'stock_objects';
+		
+		if(!commonTableExists($this->db,$this->table)) $this->disabled=true;
+		else $this->disabled=false;
+		
 		$this->id=$id;
 		$this -> title = ucphr('STOCK');
 		$this->referring_name = true;
@@ -53,10 +57,20 @@ class stock_object extends object {
 		$this -> fetch_data();
 	}
 
+	function stockEnabled ()
+	{
+		$db = get_conf(__FILE__,__LINE__,'stockDB');
+		$table='#prefix#stock_objects';
+		
+		if(commonTableExists($db,$table)) return true;
+		return false;
+	}
+
 	function list_query_all () {
-		$table = "#prefix#stock_objects";
-		$ingred_table = "#prefix#ingreds";
-		$ingred_lang_table = "#prefix#ingreds_".$_SESSION['language'];
+		$dbCommon=$_SESSION['common_db'];
+		$table = "`".$this->db."`.`#prefix#stock_objects`";
+		$ingred_table = "`$dbCommon`.`#prefix#ingreds`";
+		$ingred_lang_table = "`$dbCommon`.`#prefix#ingreds_".$_SESSION['language']."`";
 		
 		$query="SELECT
 				$table.`id`,
@@ -65,9 +79,9 @@ class stock_object extends object {
 				$table.`unit_type`,
 				$table.`quantity`,
 				$table.`value`
-				 FROM `$table`
-				 JOIN `$ingred_table`
-				 JOIN `$ingred_lang_table`
+				 FROM $table
+				 JOIN $ingred_table
+				 JOIN $ingred_lang_table
 				WHERE $table.`deleted`='0'
 				AND $ingred_table.`id`=$table.`ref_id`
 				AND $ingred_lang_table.`table_id`=$table.`ref_id`
@@ -174,7 +188,8 @@ class stock_object extends object {
 	
 	function find_external ($obj_id, $obj_type) {
 		$query = "SELECT * FROM #prefix#stock_objects WHERE `ref_type`='".$obj_type."' AND `ref_id`='".$obj_id."' AND `deleted`='0'";
-		$res = common_query($query,__FILE__,__LINE__);
+		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return ERR_MYSQL;
 	
 		while($arr = mysql_fetch_array ($res)) {
@@ -340,7 +355,8 @@ class stock_object extends object {
 	function insert_sample ($quantity) {
 		$query="INSERT INTO `#prefix#stock_samples` (`obj_id`,`quantity`) VALUES ('".$this->id."','".$quantity."')";
 
-		$res = common_query($query,__FILE__,__LINE__);
+		if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+		else $res = database_query($query,__FILE__,__LINE__,$this->db);
 		if(!$res) return ERR_MYSQL;
 		
 		return 0;
@@ -386,8 +402,9 @@ class stock_object extends object {
 		if($this->id) {
 			$editing=1;
 			$query="SELECT * FROM `".$this->table."` WHERE `id`='".$this->id."'";
-			$res=common_query($query,__FILE__,__LINE__);
-			if(!$res) return mysql_errno();
+			if($this->db=='common') $res = common_query($query,__FILE__,__LINE__);
+			else $res = database_query($query,__FILE__,__LINE__,$this->db);
+			if(!$res) return ERR_MYSQL;
 			
 			$arr=mysql_fetch_array($res);
 						
@@ -396,7 +413,7 @@ class stock_object extends object {
 			$arr['quantity'] = convert_units ($arr['quantity'].' '.$default_unit, $unit);
 		} else {
 			$editing=0;
-			$arr['id']=next_free_id($_SESSION['common_db'],$this->table);
+			$arr['id']=next_free_id($this->db,$this->table);
 		}
 	
 	

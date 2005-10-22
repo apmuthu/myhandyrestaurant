@@ -56,7 +56,7 @@ class table extends object {
 				$table.`id`,
 				$table.`name`,
 				RPAD('".ucphr('TABLES')."',30,' ') as `table`,
-				'".TABLE_TABLES."' as `table_ID`
+				RPAD('".get_class($this)."',30,' ') as `table_id`
 				FROM `$table`
 				WHERE $table.`name` LIKE '%$search%'
 				";
@@ -77,12 +77,6 @@ class table extends object {
 				";
 		
 		return $query;
-	}
-	
-	//RTG: included for performance, better than generic get that imply one query
-	//see use in
-	function getToClose() {
-		return $this->fields_boolean['toclose'];   
 	}
 	
 	function is_empty (){
@@ -111,6 +105,16 @@ class table extends object {
 		return $total;
 	}
 
+	function togglePriceEdit()
+	{
+		$user = new user($_SESSION['userid']);
+		if($user->level[USER_BIT_CASHIER])
+			$_SESSION['priceEditAllowed'][$this->id] = !$_SESSION['priceEditAllowed'][$this->id];
+		else return ERR_NOT_ALLOWED;
+		
+		return 0;
+	}
+	
 	function list_orders($output='orders_list',$orderid=0,$mods=false) {
 		if($this->is_empty()) return 1;
 		
@@ -152,30 +156,39 @@ class table extends object {
 		<tbody>';
 		$tpl -> append ($output,$tmp);
 		
-		$query="SELECT * FROM `#prefix#orders` WHERE `sourceid`='".$this->id."'";
-		if($orderid && $mods) $query .= " AND `associated_id`='".$orderid."'";
-		elseif($orderid && !$mods) $query .= " AND `id`='".$orderid."'";
+		$query="SELECT ord.*,
+		IF(dishlang.`table_name`='' OR dishlang.`table_name` IS NULL,dish.`name`,dishlang.`table_name`) as `dishname`,
+		dish.generic as generic
+		FROM `#prefix#orders` as ord
+		LEFT JOIN #prefix#dishes as dish ON dish.id=ord.dishid
+		LEFT JOIN #prefix#dishes_".$_SESSION['language']." as dishlang ON dishlang.table_id=dish.id
+		WHERE `sourceid`='".$this->id."'
+		";
 		
-		if(!get_conf(__FILE__,__LINE__,"orders_show_deleted")) $query .= " AND `deleted`='0'";
-		$query .=" ORDER BY priority ASC, associated_id ASC, dishid DESC, id ASC";
+		if($orderid && $mods) $query .= " AND ord.`associated_id`='".$orderid."'";
+		elseif($orderid && !$mods) $query .= " AND ord.`id`='".$orderid."'";
+		if(!get_conf(__FILE__,__LINE__,"orders_show_deleted")) $query .= " AND ord.`deleted`='0'";
+		
+		$query .="
+		ORDER BY ord.priority ASC,
+		ord.associated_id ASC,
+		ord.dishid DESC,
+		ord.id ASC";
 		$res=common_query($query,__FILE__,__LINE__);
 		if(!$res) return mysql_errno();
 		
-		while ($arr = mysql_fetch_array ($res)) {
-			$ord = new order ($arr['id']);
-			$dishnames[] =$ord ->  table_row_name ($arr);
-			unset ($ord);
-		}
-
-		$res=common_query($query,__FILE__,__LINE__);
-		if(!$res) return mysql_errno();
+		$toclose = $this -> get ('toclose');
 		
+		$user = new user($_SESSION['userid']);
+		if($user->level[USER_BIT_CASHIER]) $cashier=true;
+		else $cashier=false;
+		
+		$ord = new order;
 		while ($arr = mysql_fetch_array ($res)) {
-			$ord = new order ($arr['id']);
-			$tmp = $ord -> table_row ($arr);
+			$tmp = $ord -> table_row ($arr,$toclose,$cashier);
 			$tpl -> append ($output,$tmp);
-			unset ($ord);
 		}
+		unset ($ord);
 		
 		$class = COLOR_TABLE_TOTAL;
 		
@@ -204,6 +217,178 @@ class table extends object {
 		';
 		if($orderid) $tpl -> append ($output,$tmp);
 		
+		return 0;
+	}
+	
+	function join_list_tables ($cols=1){
+		global $tpl;
+		
+		$query = "SELECT DISTINCT #prefix#sources.* FROM `#prefix#sources`";
+		$query .= " JOIN `#prefix#orders`";
+		$query .= " WHERE #prefix#sources.visible = '1'";
+		$query .= " AND #prefix#sources.toclose = '0'";
+		$query .= " AND #prefix#sources.paid = '0'";
+		$query .= " AND #prefix#sources.takeaway = '0'";
+		$query .= " AND #prefix#orders.sourceid = #prefix#sources.id";
+		$query .= " AND #prefix#sources.id!='".$this->id."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+		
+		if(!$numRows=mysql_num_rows($res)) return 1;
+	
+		$output .= ucfirst(phr('ALL_TABLES')).':';
+	
+		$output .= '
+<table cellspacing="2" bgcolor="'.COLOR_TABLE_GENERAL.'" width="100%">
+	<tbody>'."\n";
+	
+		while ($arr = mysql_fetch_array ($res)) {
+			$output .= '
+	<tr>'."\n";
+			for ($i=0;$i<$cols;$i++){
+	
+				if(!$tmp = $this->join_list_cell ($arr)) {
+					$i--;
+				} else $output .= $tmp;
+				
+				if($i != ($cols - 1)) {
+					$arr = mysql_fetch_array ($res);
+				}
+			}
+		$output .= '
+	</tr>';
+		}
+
+		$output .= '
+	</tbody>
+</table>
+';
+	$tpl -> assign ('tables',$output);
+
+	return 0;	
+	}
+
+	function join_list_cell ($arr){
+		$query = "SELECT * FROM `#prefix#orders` WHERE `sourceid`='".$arr['id']."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return '';
+		
+		$link = 'orders.php?command=join&amp;data[sourceID]='.$_SESSION['sourceid'].'&amp;data[destID]='.$arr['id'];
+		if($arr['name'])
+		{
+			$output .= '
+		<td bgcolor="'. COLOR_TABLE_FREE.'" onclick="redir(\''.$link.'\');">
+			<a href="'.$link.'">'.$arr['name'].'</a>
+		</td>';
+		} else
+		{
+			$output .= '
+		<td bgcolor="'. COLOR_TABLE_FREE.'">
+			&nbsp;
+		</td>';
+		}
+		return $output;
+	}
+	
+	function join ($destination){
+		
+		// get old table info
+		$query="SELECT userid,discount,paid,customer FROM `#prefix#sources` WHERE `id`='".$this->id."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+		
+		$arr_old = mysql_fetch_array($res,MYSQL_ASSOC);
+		
+		// get new table info
+		$query="SELECT userid,discount,paid,customer FROM `#prefix#sources` WHERE `id`='".$destination."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+		
+		$arr_new=mysql_fetch_array($res,MYSQL_ASSOC);
+		
+		// sets new table data
+		$arr_new['userid']=$arr_old['userid'];
+		$arr_new['discount']=$arr_old['discount']+$arr_new['discount'];
+		$arr_new['paid']=$arr_old['paid']+$arr_new['paid'];
+		$arr_new['customer']=$arr_old['customer'];
+		
+		// the common least printed categories are saved
+		for($i=1;$i<4;$i++)
+		{
+			if(categories_printed ($this->id,$i) && categories_printed ($destination,$i)) $printedCats[$i]=true;
+			else $printedCats[$i]=false;
+		}
+		$arr_new['catprinted']=implode(" ",$printedCats);
+		
+		// get info about service fee in current table
+		$query="SELECT id,quantity,price FROM `#prefix#orders` WHERE `dishid` = '".SERVICE_ID."' AND `sourceid`='".$this->id."'";
+		$res=common_query($query,__FILE__,__LINE__);
+		if(!$res) return ERR_MYSQL;
+		if($arr = mysql_fetch_array($res,MYSQL_ASSOC))
+		{
+			$serviceFeeQuantity = $arr['quantity'];
+			$serviceFeePrice = $arr['price'];
+			$oldServiceFeeID = $arr['id'];
+		} else {
+			$serviceFeeQuantity = 0;
+			$serviceFeePrice = 0;
+			$oldServiceFeeID = 0;
+		}
+		
+		// get info about service fee in new table
+		$query="SELECT id,quantity,price FROM `#prefix#orders` WHERE `dishid` = '".SERVICE_ID."' AND `sourceid`='".$destination."'";
+		$res=common_query($query,__FILE__,__LINE__);
+		if(!$res) return ERR_MYSQL;
+		$arr = mysql_fetch_array($res,MYSQL_ASSOC);
+		if (mysql_num_rows($res)) {
+			$serviceFeeID=$arr['id'];
+			$serviceFeeQuantity = $serviceFeeQuantity + $arr['quantity'];
+			$serviceFeePrice = $serviceFeePrice + $arr['price'];
+			$query="UPDATE `#prefix#orders` SET quantity = '".$serviceFeeQuantity."',price = '".$serviceFeePrice."' WHERE `id`='$serviceFeeID'";
+			$res=common_query ($query,__FILE__,__LINE__);
+			if(!$res) return ERR_MYSQL;
+			
+		} elseif($serviceFeeQuantity)
+		{
+			$data['quantity']=$serviceFeeQuantity;
+			$data['price']=$serviceFeePrice;
+			
+			// sets session table to new table for order creation, then reverts to old
+			// final session set will be done in orders.php
+			$_SESSION['sourceid'] = $destination;
+			$id = orders_create (SERVICE_ID,$data);
+			$_SESSION['sourceid'] = $this->id;
+		}
+		
+		if($oldServiceFeeID)
+		{
+			$query="DELETE FROM `#prefix#orders` WHERE `id`='$oldServiceFeeID'";
+			$res=common_query ($query,__FILE__,__LINE__);
+			if(!$res) return ERR_MYSQL;
+		}
+		
+		
+		// moves all the orders (apart from SERVICE_IDs)
+		$query="UPDATE `#prefix#orders` SET `sourceid` = '".$destination."' WHERE `sourceid`='".$this->id."' AND dishid!='".SERVICE_ID."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+	
+		// copies table properties
+		$query="UPDATE `#prefix#sources` SET ";
+		foreach ($arr_new as $key => $value ) {
+			$query.="`".$key."`='".$value."',";
+		}
+		// strips the last comma that has been put
+		$query = substr ($query, 0, strlen($query)-1);
+		$query.=" WHERE `id`='".$destination."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+		
+		// empties the old table
+		$query = "UPDATE `#prefix#sources` SET `userid`='0',`toclose`='0',`discount` = '0.00',`paid` = '0',`catprinted` = '',`last_access_userid` = '0',`customer` = '0' WHERE `id` = '".$this->id."'";
+		$res=common_query ($query,__FILE__,__LINE__);
+		if(!$res) return mysql_errno();
+	
 		return 0;
 	}
 	
@@ -262,10 +447,20 @@ class table extends object {
 		if(table_there_are_orders($arr['id'])) return '';
 		
 		$link = 'orders.php?command=move&amp;data[id]='.$arr['id'];
-		$output .= '
+		if($arr['name'])
+		{
+			$output .= '
 		<td bgcolor="'. COLOR_TABLE_FREE.'" onclick="redir(\''.$link.'\');">
 			<a href="'.$link.'">'.$arr['name'].'</a>
 		</td>';
+		} else
+		{
+			$output .= '
+		<td bgcolor="'. COLOR_TABLE_FREE.'">
+			&nbsp;
+		</td>';
+		}
+
 	
 		return $output;
 	}
@@ -283,6 +478,7 @@ class table extends object {
 		unset ($arr_old['id']);
 		unset ($arr_old['name']);
 		unset ($arr_old['takeaway']);
+		unset ($arr_old['ordernum']);
 		
 		$query="SELECT * FROM `#prefix#sources` WHERE `id`='".$destination."'";
 		$res=common_query ($query,__FILE__,__LINE__);
@@ -316,7 +512,7 @@ class table extends object {
 		if(!$res) return mysql_errno();
 		
 		// empties the old table
-		$query = "UPDATE `#prefix#sources` SET `userid`='0',`toclose`='0',`discount` = '0.00',`paid` = '0',`catprinted` = '',`last_access_userid` = '0' WHERE `id` = '".$this->id."'";
+		$query = "UPDATE `#prefix#sources` SET `userid`='0',`toclose`='0',`discount` = '0.00',`paid` = '0',`catprinted` = '',`last_access_userid` = '0',`customer` = '0' WHERE `id` = '".$this->id."'";
 		$res=common_query ($query,__FILE__,__LINE__);
 		if(!$res) return mysql_errno();
 	

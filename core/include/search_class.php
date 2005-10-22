@@ -42,26 +42,34 @@ class search extends object {
 	}
 	
 	function list_form_start () {
-		$obj = new stock_dish;
- 		$tmp = '<form name="list_form_'.get_class($obj).'" action="'.$obj->file.'?" method="post">'."\n";
+		$tmp = '';
+		if(class_exists('stock_dish') && stock_object::stockEnabled()) {
+			$obj = new stock_dish;
+			$tmp = '<form name="list_form_'.get_class($obj).'" action="'.$obj->file.'?" method="post">'."\n";
+ 		}
 		return $tmp;
 	}
 	
 	function list_buttons () {
-		$obj = new stock_dish;
-		$tmp .= '<table width="100%"><tr>'."\n";
-		$tmp .= '<td align="left">'."\n";
-		$tmp .= '<input type="hidden" name="command" value="edit">'."\n";
-		$tmp .= '<input type="hidden" name="class" value="'.get_class($obj).'">'."\n";
-		$tmp .= '<a href="#" onClick="list_form_'.get_class($obj).'.submit();return false;">'.ucphr('EDIT_QUANTITIES').'</a>'."\n";
-		$tmp .= '</td><td align="right">'."\n";
-		$tmp .= '&nbsp;'."\n";
-		$tmp .= '</tr></table>'."\n";
+		$tmp="";
+		
+		if(class_exists('stock_object') && stock_object::stockEnabled()) {
+			$obj = new stock_dish;
+			$tmp .= '<table width="100%"><tr>'."\n";
+			$tmp .= '<td align="left">'."\n";
+			$tmp .= '<input type="hidden" name="command" value="edit">'."\n";
+			$tmp .= '<input type="hidden" name="class" value="'.get_class($obj).'">'."\n";
+			$tmp .= '<a href="#" onClick="list_form_'.get_class($obj).'.submit();return false;">'.ucphr('EDIT_QUANTITIES').'</a>'."\n";
+			$tmp .= '</td><td align="right">'."\n";
+			$tmp .= '&nbsp;'."\n";
+			$tmp .= '</tr></table>'."\n";
+		}
 		return $tmp;
 	}
 	
 	function list_query_all () {
 		global $tpl;
+		global $modManager;
 		$tpl -> assign ('title',$this -> title);
 		
 		if(access_allowed(USER_BIT_MENU)) {
@@ -113,15 +121,10 @@ class search extends object {
 				$query .= ' UNION ALL ';
 			}
 		}
-		/*
-		if(access_allowed(USER_BIT_STOCK)) {
-			$obj = new stock_dish ();
-			if(method_exists($obj,'list_search')) {
-				$query .= $obj->list_search ($this->search);
-				$query .= ' UNION ALL ';
-			}
-		}
-		*/
+		
+		//queries from the modules
+		$query .= $modManager -> getSearchQuery ($this->search);
+		
 		if(!empty($query)) $query=substr($query,0,-11);			// strips out last UNION ALL
 		return $query;
 	}
@@ -135,7 +138,7 @@ class search extends object {
 			$display->rows[0][$col]='<input type="checkbox" name="all_checker" onclick="check_all(\''.$this->form_name.'\',\'delete[]\')">';
 			$display->width[0][$col]='1%';
 			$col++;
-		} elseif ($arr['table_id']==TABLE_DISHES) {
+		} elseif (trim($arr['table_id'])=='dish') {
 			$display->rows[0][$col]='<input type="checkbox" name="all_checker" onclick="check_all(\''.$this->form_name.'\',\'edit[]\')">';
 			$display->width[0][$col]='1%';
 			$col++;
@@ -178,7 +181,7 @@ class search extends object {
 			$display->rows[$row][$col]='<input type="checkbox" name="delete[]" value="'.$arr['id'].'">';
 			$display->width[$row][$col]='1%';
 			$col++;
-		} elseif ($arr['table_id']==TABLE_DISHES) {
+		} elseif (trim($arr['table_id'])=='dish') {
 			$dish = new dish ($arr['id']);
 			if(count($dish->ingredients()) || count($dish->dispingredients())) {
 				$display->rows[$row][$col]='<input type="checkbox" name="edit[]" value="'.$arr['id'].'">';
@@ -196,18 +199,8 @@ class search extends object {
 		foreach ($arr as $field => $value) {
 			if(isset($this->hide) && in_array($field,$this->hide)) continue;
 			
-			switch($arr['table_id']) {
-				case TABLE_INGREDIENTS: $obj=new ingredient; break;
-				case TABLE_DISHES: $obj=new dish; break;
-				case TABLE_CATEGORIES: $obj=new category; break;
-				case TABLE_TABLES: $obj=new table; break;
-				case TABLE_USERS: $obj=new user; break;
-				case TABLE_VAT_RATES: $obj=new vat_rate; break;
-				case TABLE_PRINTERS: $obj=new printer; break;
-				case TABLE_STOCK_OBJECTS: $obj=new stock_object; break;
-				case TABLE_STOCK_DISHES: $obj=new dish; break;
-			}
-			
+			$cls = trim($arr['table_id']);
+			if(class_exists($cls)) $obj = new $cls;
 			
 			if(method_exists($obj,'form')) $link = $obj->file.'?class='.get_class($obj).'&amp;command=edit&amp;data[id]='.$arr['id'];
 			else $link='';
@@ -218,8 +211,6 @@ class search extends object {
 			$col++;
 		}
 	}
-		
-	
 }
 
 ?>

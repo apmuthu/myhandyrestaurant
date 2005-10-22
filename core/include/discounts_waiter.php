@@ -40,7 +40,9 @@ function discount_save_to_source($discount_value){
 	return 0;
 }
 
-function write_log_discount($discount_value,$receipt_id){
+function write_log_discount($discount_value,$transaction_id){
+	return write_log_item(DISCOUNT_ID,1,-1*abs($discount_value),$transaction_id);
+	
 	$log_table=$GLOBALS['table_prefix']."account_log";
 
 	$log["waiter"]=$_SESSION['userid'];
@@ -68,7 +70,7 @@ function write_log_discount($discount_value,$receipt_id){
 	$query.=")";
 
 	// CRYPTO
-	$res = mysql_db_query ($_SESSION['account'],$query);
+	$res = mysql_db_query ($_SESSION['mgmt_db'],$query);
 	if($errno=mysql_errno()) {
 		$msg="Error in ".__FUNCTION__." - ";
 		$msg.='mysql: '.mysql_errno().' '.mysql_error()."\n";
@@ -82,22 +84,16 @@ function write_log_discount($discount_value,$receipt_id){
 
 
 function apply_discount_percent($sourceid,$percent){
-	/*
-		Error codes:
-		5. Percent <0 or >100
-
-	*/
-
 	$_SESSION['discount']['type']="percent";
 
-	$percent_float=(float) $percent;
-	if($percent_float<0 || $percent_float>100)
-		return 5;
+	$percent=(float) $percent;
+	if($percent<0) $percent=-$percent;
+	elseif($percent>100) $percent=100;
 
   	if($percent){
 		$_SESSION['discount']=array('type','percent','amount');
 		$_SESSION['discount']['type']="percent";
-		$_SESSION['discount']['percent']=$percent_float;
+		$_SESSION['discount']['percent']=$percent;
 		$_SESSION['discount']['amount']=0;
 	} else {
 		unset($_SESSION['discount']);
@@ -108,19 +104,13 @@ function apply_discount_percent($sourceid,$percent){
 
 
 function apply_discount_amount($sourceid,$amount){
-	/*
-		Error codes:
-		5. Amount < 0
-		6. Amount > total
-	*/
 	$_SESSION['discount']['type']="amount";
 	$amount=str_replace (",", ".", $amount);
 	$amount=(float) $amount;
-	if($amount<0)
-		return 5;
-
-	if($amount>table_total_without_discount($sourceid))
-		return 6;
+	
+	// if($amount>table_total_without_discount($sourceid)) $amount=table_total_without_discount($sourceid);
+	if($amount>bill_total()) $amount=bill_total();
+	elseif($amount<0) $amount=-$amount;
 
 	$amount=-1*$amount;
 
@@ -158,8 +148,8 @@ function apply_discount($discount_type){
 }
 
 function discount_calculate_from_percent($sourceid,$percent){
-	if($percent>100 || $percent<0)
-		return 3;
+	if($percent>100) $percent=100;
+	elseif($percent<0) $percent=0;
 
 	$total_no_disc=source_total_without_discount($sourceid);
 	$amount=round(-1*$total_no_disc/100*$percent,2);
@@ -168,10 +158,6 @@ function discount_calculate_from_percent($sourceid,$percent){
 	return $amount;
 }
 
-
-function discount_edit($discount_id,$amount){
-	$_SESSION['discount']=$amount;
-}
 
 function discount_form_javascript($sourceid){
 	$output = '';
@@ -216,44 +202,13 @@ function discount_form_javascript($sourceid){
 	<INPUT TYPE="HIDDEN" NAME="keep_separated" VALUE="1">
 	<input type="radio" name="discount_type" value="none" onclick="JavaScript:discount_switch();" '.$chk[0].'>'.ucfirst(phr('NONE')).'<br />
 	<input type="radio" name="discount_type" value="percent" onclick="JavaScript:discount_switch();" '.$chk[1].'>
-	'.ucfirst(phr('PERCENTUAL')).' <INPUT TYPE="text" name="percent" size="2" maxlength="2" value="'.$percent.'" '.$dis[1].'>% <br />
+	'.ucfirst(phr('PERCENTUAL')).' <INPUT TYPE="text" name="percent" size="3" maxlength="3" value="'.$percent.'" '.$dis[1].'>% <br />
 	<input type="radio" name="discount_type" value="amount" onclick="JavaScript:discount_switch();" '.$chk[2].'>'.ucfirst(phr('VALUE')).' <INPUT TYPE="text" name="amount"
-	size="4" maxlength="4" value="'.$amount.'" '.$dis[2].'>'.country_conf_currency (true).'<br />
+	size="6" maxlength="10" value="'.$amount.'" '.$dis[2].'>'.country_conf_currency (true).'<br />
 	<INPUT TYPE="SUBMIT" value="'.ucfirst(phr('APPLY_DISCOUNT')).'"><br />
 	</FORM>
 	</FIELDSET>
 	';
 	return $output;
 }
-
-function discount_delete($discount_id){
-	unset($_SESSION['discount']);
-}
-
-
-function discount_insert($sourceid,$amount){
-	$_SESSION['discount']=$amount;
-}
-
-
-function discount_find($sourceid){
-	if(isset($_SESSION['discount']))
-		return 1;
-	else return 0;
-}
-
-
-function discount_read_amount($discount_id){
-	return $_SESSION['discount'];
-}
-
-function discount_calculate_percent_from_amount($sourceid,$discount_id){
-	$amount=discount_read_amount($discount_id);
-
-	$total_no_disc=source_total_without_discount($sourceid);
-
-	$percent=round(-1*$amount/$total_no_disc*100);
-	return $percent;
-}
-
 ?>
