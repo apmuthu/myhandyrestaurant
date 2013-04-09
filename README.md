@@ -13,4 +13,7 @@ http://sf.net/projects/smartres
 and
 https://github.com/gjergjsheldija/smart-restaurant
 
+Some documentation is available at:
+http://smartres.sourceforge.net
+
 
