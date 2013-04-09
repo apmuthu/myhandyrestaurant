@@ -424,7 +424,7 @@ function printAddTicketID($msg,$idLog)
 	if(!CONF_PRINT_TICKET_ID) return $msg;
 	
 	$tmpMsg = "Ticket ID: $idLog";
-	//$msg = eregi_replace ("{[^}]*ticketID[^}]*}", "$dest_msg", $msg);
+	//$msg = preg_replace ("/{[^}]*ticketID[^}]*}/i", "$dest_msg", $msg);
 	$msg = preg_replace("/\{.*?".'ticketID'.".*?\}/",$tmpMsg,$msg);
 	
 	return $msg;
@@ -452,7 +452,7 @@ function print_line($destid,$msg,$saveToLog=true){
 		$destname=get_db_data(__FILE__,__LINE__,$_SESSION['common_db'],'dests','name',$destid);
 		$dest_msg ="destid: $destid";
 		$dest_msg.="\ndestname: $destname";
-		$msg = eregi_replace ("{[^}]*destination[^}]*}", "$dest_msg", $msg);
+		$msg = pregi_replace ("/{[^}]*destination[^}]*}/i", "$dest_msg", $msg);
 		$msg=preg_replace("/\{.*?".'destination'.".*?\}/",$dest_msg,$msg);
 	}
 

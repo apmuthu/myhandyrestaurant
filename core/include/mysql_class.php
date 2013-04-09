@@ -207,7 +207,7 @@ class db_manager {
 			$trimmedline=trim($line);
 			
 			if(eregi("#[^:]*database_type[^:]*:",$line)) {
-				$line = eregi_replace ("#[^:]*database_type[^:]*:", "", $line);
+				$line = preg_replace ("/#[^:]*database_type[^:]*:/i", "", $line);
 				//$line = fgets ($fp, 1024*1024);						// read it line by line.
 				$db_type=trim($line);
 				$db_type=strtolower($db_type);
@@ -222,7 +222,7 @@ class db_manager {
 			}
 
 			if (eregi (';$',$trimmedline)) {						// If this is the end of a query,
-				$query = eregi_replace (";$", "", $query); // remove the semicolon,
+				$query = preg_replace ("/;$/i", "", $query); // remove the semicolon,
 				//$query = str_replace (';', '', $query);	// remove the semicolon,
 
 				$tmp_arr=explode(' ',trim($query));
