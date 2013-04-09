@@ -141,7 +141,7 @@ class template {
 		$template = stripslashes($template);
 		for (reset ($this->vars); list ($key, $value) = each ($this->vars); ) {
 			//$pattern="{[^}]*".$key."[^}]*}";
-			//$template = eregi_replace("$pattern", "$value", $template);
+			//$template = preg_replace("/$pattern/i", "$value", $template);
 			
 			$template=preg_replace("/\{.*?".$key.".*?\}/",$value,$template);
 		}
@@ -160,7 +160,7 @@ class template {
 		$template = stripslashes($string);
 		for (reset ($this->vars); list ($key, $value) = each ($this->vars); ) {
 			//$pattern="{[^}]*".$key."[^}]*}";
-			//$template = eregi_replace("$pattern", "$value", $template);
+			//$template = preg_replace("/$pattern/i", "$value", $template);
 			
 			$template=preg_replace("/\{.*?".$key.".*?\}/",$value,$template);
 		}
@@ -189,7 +189,7 @@ class template {
 		}
 		
 		$pattern="{[^}]*}";
-		$this->output = eregi_replace($pattern, "", $this->output);
+		$this->output = preg_replace("/$pattern/i", "", $this->output);
 		
 		$this->output=str_replace('[[[curlyl]]]','{',$this->output);
 		$this->output=str_replace('[[[curlyr]]]','}',$this->output);

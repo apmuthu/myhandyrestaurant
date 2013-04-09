@@ -185,7 +185,7 @@ EOT;
 		//$output.='<ul>';
 		while (! feof ($fp)){									// While the file lasts,
 			$line = fgets ($fp, 1024*1024);					// read it line by line.
-			//$msg = eregi_replace ("{[^}]*destination[^}]*}", "$dest_msg", $msg);
+			//$msg = preg_replace ("/{[^}]*destination[^}]*}/i", "$dest_msg", $msg);
 			$line = trim($line);
 			//$line=htmlentities($line);
 			//$line=addslashes($line);
