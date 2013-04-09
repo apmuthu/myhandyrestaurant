@@ -785,7 +785,7 @@ function list_db_languages() {
 	$res_lang=mysql_list_tables($_SESSION['common_db']);
 	while($arr_lang=mysql_fetch_array($res_lang)) {
 		if(eregi($GLOBALS['table_prefix'].'[^_]*_*.*[^_]*_.?.?$',$arr_lang[0])) {
-			$lang_now=eregi_replace($GLOBALS['table_prefix']."[^_]*_*.*[^_]*_(.?.?)$","\\1",$arr_lang[0]);
+			$lang_now=preg_replace("/".$GLOBALS['table_prefix']."[^_]*_*.*[^_]*_(.?.?)$/i","\\1",$arr_lang[0]);
 //echo 'lang: '.$lang_now."<br>";
 			$lang_now= substr($lang_now,-2);		// this is useless if eregi works correctly, but a check it's better, isn't it?
 			

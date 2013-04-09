@@ -88,8 +88,8 @@ class db_manager {
 	
 	function upgrade_upgrade_to_do ($filename) {
 		$upgrade_str = $filename;
-		$upgrade_str=eregi_replace("^mhr_",'',$upgrade_str);
-		$upgrade_str=eregi_replace("\.sql$",'',$upgrade_str);
+		$upgrade_str=preg_replace("/^mhr_/i",'',$upgrade_str);
+		$upgrade_str=preg_replace("/\.sql$/i",'',$upgrade_str);
 
 		list($upgrade_id,$from_version,$expected_version)=explode('_',$upgrade_str,3);
 		
@@ -122,8 +122,8 @@ class db_manager {
 		// mhr_0003_0.8.4-beta1_0.8.4-beta2.sql
 		
 		$upgrade_str = $filename;
-		$upgrade_str=eregi_replace("^mhr_",'',$upgrade_str);
-		$upgrade_str=eregi_replace("\.sql$",'',$upgrade_str);
+		$upgrade_str=preg_replace("/^mhr_/i",'',$upgrade_str);
+		$upgrade_str=preg_replace("/\.sql$/i",'',$upgrade_str);
 
 		list($upgrade_id,$from_version,$expected_version)=explode('_',$upgrade_str,3);
 		
@@ -990,7 +990,7 @@ Done ".$_SESSION['restore_sql']['done_bytes'].'/'.$_SESSION['restore_sql']['tota
 			
 			if(!$this->upgrade_upgrade_to_do ($filename)) continue;
 			
-			$tmp_local = eregi_replace("\.sql$",'',$filename);
+			$tmp_local = preg_replace("/\.sql$/i",'',$filename);
 			list($tmp_local,$number,$version_from,$version_to) = explode("_", $tmp_local);
 			$description=ucfirst(phr('VERSION_FROM'));
 			$description.=' '.$version_from;
